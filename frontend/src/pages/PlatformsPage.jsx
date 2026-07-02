@@ -1,0 +1,237 @@
+import { useState, useEffect } from 'react';
+import { api } from '../api';
+import { useToast } from '../context/ToastContext';
+import Loading from '../components/Loading';
+
+export default function PlatformsPage() {
+  const [platforms, setPlatforms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({
+    name: '',
+    display_name: '',
+    provider_type: 'streaming',
+    code_pattern: '',
+    sender_pattern: '',
+    subject_pattern: '',
+    icon: '',
+  });
+  const toast = useToast();
+
+  const fetchPlatforms = async () => {
+    try {
+      const data = await api.getPlatforms();
+      setPlatforms(data);
+    } catch (err) {
+      toast.error('Error al cargar plataformas');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlatforms();
+  }, []);
+
+  const resetForm = () => {
+    setForm({ name: '', display_name: '', provider_type: 'streaming', code_pattern: '', sender_pattern: '', subject_pattern: '', icon: '' });
+    setEditing(null);
+    setShowForm(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editing) {
+        const updateData = { ...form };
+        if (!updateData.code_pattern) delete updateData.code_pattern;
+        if (!updateData.sender_pattern) delete updateData.sender_pattern;
+        if (!updateData.subject_pattern) delete updateData.subject_pattern;
+        await api.updatePlatform(editing.id, updateData);
+        toast.success('Plataforma actualizada');
+      } else {
+        await api.createPlatform(form);
+        toast.success('Plataforma creada');
+      }
+      resetForm();
+      fetchPlatforms();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleEdit = (platform) => {
+    setForm({
+      name: platform.name,
+      display_name: platform.display_name || '',
+      provider_type: platform.provider_type,
+      code_pattern: platform.code_pattern || '',
+      sender_pattern: platform.sender_pattern || '',
+      subject_pattern: platform.subject_pattern || '',
+      icon: platform.icon || '',
+    });
+    setEditing(platform);
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('¿Eliminar esta plataforma?')) return;
+    try {
+      await api.deletePlatform(id);
+      toast.success('Plataforma eliminada');
+      fetchPlatforms();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  if (loading) return <Loading text="Cargando plataformas..." />;
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1><i className="fas fa-tv"></i> Plataformas</h1>
+        <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>
+          <i className="fas fa-plus"></i> Agregar Plataforma
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="modal-overlay" onClick={(e) => e.target.className === 'modal-overlay' && resetForm()}>
+          <div className="modal">
+            <div className="modal-header">
+              <h2>{editing ? 'Editar Plataforma' : 'Nueva Plataforma'}</h2>
+              <button className="btn-close" onClick={resetForm}>&times;</button>
+            </div>
+            <form onSubmit={handleSubmit} className="modal-body">
+              <div className="form-row">
+                <div className="form-group flex-1">
+                  <label>Nombre (ID)</label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    required
+                    placeholder="netflix"
+                    disabled={!!editing}
+                  />
+                </div>
+                <div className="form-group flex-1">
+                  <label>Nombre mostrado</label>
+                  <input
+                    type="text"
+                    value={form.display_name}
+                    onChange={e => setForm({ ...form, display_name: e.target.value })}
+                    placeholder="Netflix"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Tipo</label>
+                  <select value={form.provider_type} onChange={e => setForm({ ...form, provider_type: e.target.value })}>
+                    <option value="streaming">Streaming</option>
+                    <option value="ai">IA</option>
+                    <option value="other">Otro</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Icono</label>
+                  <input
+                    type="text"
+                    value={form.icon}
+                    onChange={e => setForm({ ...form, icon: e.target.value })}
+                    placeholder="netflix"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Patrón de código (regex)</label>
+                <input
+                  type="text"
+                  value={form.code_pattern}
+                  onChange={e => setForm({ ...form, code_pattern: e.target.value })}
+                  placeholder={'\\b(\\d{6})\\b'}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Patrón de remitente (regex)</label>
+                <input
+                  type="text"
+                  value={form.sender_pattern}
+                  onChange={e => setForm({ ...form, sender_pattern: e.target.value })}
+                  placeholder="info@netflix.com"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Patrón de asunto (regex)</label>
+                <input
+                  type="text"
+                  value={form.subject_pattern}
+                  onChange={e => setForm({ ...form, subject_pattern: e.target.value })}
+                  placeholder="código|verificación"
+                />
+              </div>
+
+              <div className="form-actions">
+                <button type="button" className="btn btn-outline" onClick={resetForm}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">
+                  {editing ? 'Guardar Cambios' : 'Crear Plataforma'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Plataforma</th>
+              <th>Tipo</th>
+              <th>Patrón código</th>
+              <th>Patrón remitente</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {platforms.map(p => (
+              <tr key={p.id}>
+                <td>
+                  <strong>{p.display_name || p.name}</strong>
+                  <div className="text-muted">{p.name}</div>
+                </td>
+                <td>
+                  <span className={`badge badge-${p.provider_type}`}>
+                    {p.provider_type === 'streaming' ? '📺 Streaming' : p.provider_type === 'ai' ? '🤖 IA' : '📦 Otro'}
+                  </span>
+                </td>
+                <td><code className="code-inline">{p.code_pattern || '-'}</code></td>
+                <td><code className="code-inline">{p.sender_pattern || '-'}</code></td>
+                <td>
+                  <span className={`status-dot ${p.is_active ? 'active' : 'inactive'}`}></span>
+                  {p.is_active ? 'Activo' : 'Inactivo'}
+                </td>
+                <td className="actions-cell">
+                  <button className="btn btn-sm" onClick={() => handleEdit(p)} title="Editar">
+                    <i className="fas fa-edit"></i>
+                  </button>
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)} title="Eliminar">
+                    <i className="fas fa-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

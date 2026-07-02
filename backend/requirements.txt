@@ -1,0 +1,18 @@
+fastapi==0.138.2
+uvicorn[standard]==0.49.0
+sqlalchemy==2.0.51
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-jose[cryptography]==3.5.0
+bcrypt==5.0.0
+python-multipart==0.0.32
+cryptography==49.0.0
+alembic==1.18.5
+websockets>=16.0
+# Driver Postgres para Supabase en producción. Sin esto, create_engine falla
+# con "ModuleNotFoundError: No module named 'psycopg2'" al apuntar a una URL
+# postgresql://. En dev/test seguimos usando SQLite (sin driver extra).
+# Importante: usar el pooler de Supabase en puerto 6543 (no 5432) porque
+# Render free tier no tiene salida IPv6 y Supabase quitó IPv4 del puerto
+# directo. Ver docs/07-DEPLOY.md para los detalles.
+psycopg2-binary>=2.9.9

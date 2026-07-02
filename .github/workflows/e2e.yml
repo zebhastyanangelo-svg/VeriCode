@@ -1,0 +1,110 @@
+name: E2E Backend Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sistema-codigos/backend/**"
+      - "sistema-codigos/.github/workflows/e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "sistema-codigos/backend/**"
+      - "sistema-codigos/.github/workflows/e2e.yml"
+
+jobs:
+  e2e:
+    name: E2E (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: sistema-codigos/backend/requirements.txt
+
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y iproute2
+
+      - name: Install Python deps
+        working-directory: sistema-codigos/backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Smoke-import app
+        # Verifica que el módulo app.main se puede importar sin errores de
+        # sintaxis ni de imports faltantes. En modo dev (vericode_env
+        # default), production_guards() es no-op → no se rompe.
+        working-directory: sistema-codigos/backend
+        env:
+          VERICODE_ENV: development
+        run: python -c "import app.main; print('import OK')"
+
+      - name: Test production_guards fail-fast
+        # Unit tests que verifican que `_production_guards()` y
+        # `is_production()` cierran el bug crítico case-sensitive:
+        # VERICODE_ENV='Production' (cualquier variante) DEBE disparar
+        # los guards. Sin este test, una regresión del case-sensitive
+        # pasaría silenciosamente y dejaría admin auto-creado en prod.
+        working-directory: sistema-codigos/backend
+        env:
+          VERICODE_ENV: development
+        run: python tests/test_production_guards.py
+
+      - name: Test cache module
+        # Unit tests de `app.core.cache` (TTL in-process con SWR sin
+        # lock). Cubre: version-keyed invalidation, bump_version,
+        # stale-while-revalidate, _CACHE_HARD_CAP eviction, ValueError
+        # en namespace con ":", key_parts separation, cross-router
+        # namespace sharing y clear_all reset.
+        working-directory: sistema-codigos/backend
+        env:
+          VERICODE_ENV: development
+        run: python tests/test_cache.py
+
+      - name: Run E2E suite
+        # e2e_test.py self-launches el backend vía _launch_e2e.py, espera
+        # que esté ready, corre 13 tests (incluyendo los 3 de seguridad de
+        # los huecos críticos), captura stdout del backend en
+        # _e2e_backend.log, y limpia el subprocess group al final.
+        working-directory: sistema-codigos/backend
+        env:
+          VERICODE_ENV: development
+          BACKEND_PORT: "8765"
+          POLL_INTERVAL_SECONDS: "3600"
+          # Forzar que el backend arranque en dev mode para que
+          # production_guards() no falle (no Seteamos BOOTSTRAP_TOKEN).
+          SECRET_KEY: ci-test-secret-key-do-not-use-in-production-32chars
+        run: |
+          rm -f codigos_e2e.db _e2e_backend.log
+          python tests/e2e_test.py
+
+      - name: Upload backend log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-backend-log-py${{ matrix.python-version }}
+          path: sistema-codigos/backend/_e2e_backend.log
+          if-no-files-found: ignore
+
+      - name: Upload E2E summary on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-summary-py${{ matrix.python-version }}
+          path: |
+            sistema-codigos/backend/_e2e_backend.log
+            sistema-codigos/backend/codigos_e2e.db
+          if-no-files-found: ignore

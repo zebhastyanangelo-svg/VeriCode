@@ -1,0 +1,88 @@
+# =============================================================================
+# VeriCode — root .gitignore
+# Cubre backend (Python) + frontend (Node/Vite) y cruft de workspace.
+# El frontend ya tiene su propio .gitignore; este es complementario.
+# =============================================================================
+
+# ── Backend: Python + venv + SQLite + logs ──────────────────────────────────
+backend/venv/
+backend/env/
+backend/.venv/
+backend/**/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/htmlcov/
+backend/.coverage
+backend/.coverage.*
+backend/codigos*.db
+backend/codigos*.sqlite3
+backend/*.db-journal
+backend/_e2e_backend.log
+backend/*.log
+backend/.env
+backend/.env.development
+backend/.env.production
+backend/.env.staging
+backend/.env.local
+backend/.env.*.local
+!backend/.env.example
+
+# ── Frontend: Node + Vite ───────────────────────────────────────────────────
+# (frontend/.gitignore ya cubre la mayoría; esto es redundancia defensiva)
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+frontend/*.local
+frontend/.env
+frontend/.env.development
+frontend/.env.production
+frontend/.env.staging
+frontend/.env.local
+frontend/.env.*.local
+!frontend/.env.example
+
+# ── Workspace + editor ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.env
+.env.development
+.env.production
+.env.staging
+.env.local
+.env.*.local
+*.swp
+*.swo
+*.bak
+*.tmp
+*.orig
+*.rej
+*.lock
+# Logs — patrón nameless que cubre cualquier .log en cualquier nivel.
+*.log
+# Escape hatches: lockfiles reproducibles NO deben ignorarse si se agregan
+# las herramientas correspondientes (Pipenv, npm, yarn).
+!Pipfile.lock
+!package-lock.json
+!yarn.lock
+!pnpm-lock.yaml
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS
+*~
+
+# Docker overrides locales
+docker/.env
+docker-compose.override.yml

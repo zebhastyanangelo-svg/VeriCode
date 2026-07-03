@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core import cache as app_cache
 from app.db.database import get_db
 from app.models import EmailAccount, Platform, VerificationCode
-from app.schemas import EmailAccountOut, PlatformOut
+from app.schemas import PlatformOut
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -29,32 +29,6 @@ def _sanitize_email_address(raw: str) -> str:
         except Exception:
             return raw
     return raw.strip()
-
-
-@router.get("/email-accounts", response_model=list[EmailAccountOut])
-async def list_email_accounts(
-    db: Session = Depends(get_db),
-):
-    """Lista pública de cuentas activas. Cacheada 30s.
-
-    Cache-Control: public (max-age=30) viaja en el response para que el
-    navegador del usuario público retenga el resultado entre
-    page-reloads sin volver a pegarle al backend.
-    304 inline con ETag queda deferido para una próxima iteración; el
-    cache del navegador cubre el 90% del ahorro de bandwidth.
-    """
-    def _compute():
-        return db.query(EmailAccount).filter(
-            EmailAccount.is_active == True
-        ).order_by(EmailAccount.email).all()
-
-    payload = app_cache.get_or_compute(
-        app_cache.NS_EMAIL_ACCOUNTS,
-        ttl_seconds=30,
-        compute_fn=_compute,
-        key_parts=("active",),
-    )
-    return payload
 
 
 @router.get("/platforms", response_model=list[PlatformOut])

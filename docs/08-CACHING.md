@@ -9,7 +9,7 @@ decisiones que la motivan y los trade-offs que conocidamente deja.
 |------|------------|-----|--------------|
 | Backend in-process | `GET /codes/stats` | 30 s | bump en `mark_delivered` / `mark_read` |
 | Backend in-process | `GET /platforms` (admin + público) | 60 s | bump en POST/PUT/DELETE de `/platforms` |
-| Backend in-process | `GET /email-accounts` (admin + público, sólo activas) | 30 s | bump en POST/PUT/DELETE de `/email-accounts` |
+| Backend in-process | `GET /email-accounts` (admin, sólo activas) | 30 s | bump en POST/PUT/DELETE de `/email-accounts` |
 | HTTP `Cache-Control` | Todos los GET anteriores | 5–60 s | ETag derivado de `cache_version[ns]` |
 | HTTP `ETag` | Mismos endpoints | — | Bumpea junto al namespace |
 | Middleware | `GZipMiddleware` para bodies JSON ≥ 500 B | — | — |
@@ -75,10 +75,10 @@ re-crea).
 
 ### 3.3 Namespaces compartidos admin↔público
 
-`NS_PLATFORMS` y `NS_EMAIL_ACCOUNTS` son compartidos entre los routers
-admin (que requieren auth) y `/public/*` (sin auth). Esto significa
-que cuando el admin muta una plataforma, **ambos** caches se invalidan
-al toque. Si en el futuro los routers divergen (e.g. distintos campos
+`NS_PLATFORMS` es compartido entre admin y público. `NS_EMAIL_ACCOUNTS`
+solo sirve al router admin (el endpoint público fue eliminado).
+Cuando el admin muta una plataforma, **ambos** caches se invalidan al
+toque. Si en el futuro los routers divergen (e.g. distintos campos
 proyectados), conviene un namespace por combinación.
 
 ### 3.4 Lo que SÍ invalida vs lo que NO invalida `codes_stats`
@@ -87,7 +87,7 @@ proyectados), conviene un namespace por combinación.
 |--------|----------------|-------|
 | `PUT /codes/{id}/deliver` | ✓ | decrementa `undelivered` |
 | `PUT /codes/{id}/read` | ✓ | decrementa `unread` |
-| IMAP poll crea código | NO | el WS entrega el código al cliente; stats se reconcilian dentro del TTL |
+| IMAP IDLE watcher crea código | NO | el WS entrega el código al cliente; stats se reconcilian dentro del TTL |
 | `POST /email-accounts/{id}/poll` | NO | mismo motivo |
 
 Decisión consciente: las counters pueden quedar stale hasta 30s

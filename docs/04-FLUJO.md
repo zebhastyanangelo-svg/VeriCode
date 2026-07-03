@@ -13,7 +13,7 @@
 graph TD
     A[Inicio] --> B[Levantar backend uvicorn]
     B --> C[seed.py crea plataformas base]
-    C --> D[IMAP Poller arranca cada 30 s]
+    C --> D[IMAP IDLE Watcher arranca (conexiones persistentes)]
     D --> E[Levantar frontend npm run dev]
     E --> F[Abrir /#/login]
     F --> G[GET /api/v1/auth/setup<br/>crea admin/admin123]
@@ -50,12 +50,9 @@ graph TD
     A1[Visita /#/code-request] --> B1{Cargó frontend sin auth?}
     B1 -- Sí --> C1[Carga selectores]
     B1 -- Bloqueado por guard<br/>BUG --> X1[Lo arregla opencode]
-    C1 --> D1[GET /api/v1/public/email-accounts]
     C1 --> D2[GET /api/v1/public/platforms]
-    D1 --> E1[Renderiza select de correos activos]
     D2 --> E2[Renderiza select de plataformas activas]
-    E1 --> F1[Cliente selecciona correo + plataforma]
-    E2 --> F1
+    E2 --> F1[Cliente ingresa correo + selecciona plataforma]
     F1 --> G1[Click 'Buscar Código']
     G1 --> H1[POST /api/v1/public/request-code]
     H1 --> I1[Backend busca código en BD]
@@ -74,51 +71,50 @@ graph TD
 
 ---
 
-## Flujo C — Poller procesa un correo nuevo
+## Flujo C — IMAP IDLE Watcher procesa un correo nuevo
 
 **Actor**: sistema (background).
-**Objetivo**: detectar, extraer y persistir un código.
+**Objetivo**: mantener conexiones IMAP IDLE persistentes y procesar correos entrantes en tiempo real.
 
 ```mermaid
 sequenceDiagram
     participant Loop as asyncio loop
-    participant Poller as IMAPPoller
+    participant Watcher as IMAP IDLE Watcher (por cuenta)
     participant IMAP as Servidor IMAP
     participant DB as SQLAlchemy/SQLite
     participant WS as ConnectionManager
 
-    Loop->>Poller: tick (cada 30 s)
-    Poller->>DB: query accounts WHERE is_active=true
-    DB-->>Poller: [account_a, account_b, ...]
-    loop por cada cuenta
-        Poller->>IMAP: IMAP4_SSL.login + select 'INBOX'
-        IMAP-->>Poller: ok
-        Poller->>IMAP: search UNSEEN últimas 10
-        IMAP-->>Poller: [uid1, uid2, ...]
-        loop por uid
-            Poller->>IMAP: fetch RFC822 + store +FLAGS \Seen
-            IMAP-->>Poller: raw bytes
-            Poller->>Poller: parse from, subject, body
-            Poller->>Poller: account.platform ?? guess_platform
-            Poller->>Poller: extract_code_from_body
-            alt código extraído y no existe
-                Poller->>DB: INSERT verification_code
-                DB-->>Poller: new_code object
-                Poller->>Loop: run_coroutine_threadsafe(notify_new_code)
-                Loop->>WS: broadcast_new_code({type:new_code,data})
-                WS-->>Frontend: WS message al dashboard
-            end
-        end
+    Loop->>Watcher: crear watchers (1 por cuenta activa)
+    Watcher->>IMAP: aioimaplib.IMAP4_SSL.connect + login
+    IMAP-->>Watcher: ok
+    Watcher->>IMAP: SELECT INBOX
+    IMAP-->>Watcher: ok
+    Watcher->>IMAP: IDLE (RFC 2177)
+    Note right of Watcher: Conexión persistente, sin polling
+    IMAP-->>Watcher: push: * N EXISTS (nuevo correo!)
+    Watcher->>IMAP: IDLE DONE → search UNSEEN
+    IMAP-->>Watcher: [uid]
+    Watcher->>IMAP: fetch RFC822 + store +FLAGS \Seen
+    IMAP-->>Watcher: raw bytes
+    Watcher->>Watcher: parse from, subject, body
+    Watcher->>Watcher: account.platform ?? guess_platform
+    Watcher->>Watcher: extract_code_from_body
+    alt código extraído y no existe
+        Watcher->>DB: INSERT verification_code
+        DB-->>Watcher: new_code object
+        Watcher->>Loop: run_coroutine_threadsafe(notify_new_code)
+        Loop->>WS: broadcast_new_code({type:new_code,data})
+        WS-->>Frontend: WS message al dashboard
     end
-    Poller->>DB: update account.last_checked
+    Watcher->>IMAP: IDLE (nuevo ciclo, espera próximo push)
 ```
 
 ### Garantías
 
 - **Idempotencia**: si el mismo (email_account, code, subject) ya existe en BD → no duplica.
 - **Thread-safety**: la notificación al WS se ejecuta en el loop principal vía `asyncio.run_coroutine_threadsafe`, evitando el bug clásico de `loop.run_until_complete` desde thread sync.
-- **Recuperación**: si el IMAP falla (timeout, auth fail) → log de error y continúa con la siguiente cuenta (no rompe el ciclo).
-- **`last_checked`**: se actualiza siempre al final del ciclo de la cuenta, útil para diagnóstico.
+- **Conexión persistente**: cada watcher mantiene su conexión aioimaplib abierta. Si se pierde (timeout, error de red) → reconexión automática con backoff de 10 s.
+- **IDLE timeout**: configurable vía `IMAP_IDLE_TIMEOUT` (default 1680 s = 28 min). Al expirar se re-entra en IDLE automáticamente.
 
 ---
 
@@ -198,7 +194,7 @@ Hoy **no existe**: el cliente tiene que entrar a `/#/code-request` activamente.
 |-------|--------|
 | **A** — Primer arranque | ✅ Funciona con `python seed.py`. ⚠️ Falta auto-llamar `/auth/setup` desde `lifespan`. |
 | **B** — Cliente pide código | ⚠️ Backend OK, frontend bug (guard auth). **Fix en `App.jsx`**. |
-| **C** — Poller | ✅ Funciona con fix de thread-safety aplicado. |
+| **C** — IMAP IDLE Watcher | ✅ Funcional (aioimaplib, conexiones persistentes, push). |
 | **D** — Admin plataforma | ✅ Funciona. |
 | **E** — Admin casilla | ✅ Funciona. `platform_id` ya soportado. |
 | **F** — Notificación proactiva | ❌ No implementado — roadmap v1.1. |

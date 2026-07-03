@@ -146,7 +146,6 @@ export const api = {
   ping: () => publicFetch('/public/ping'),
 
   public: {
-    getEmailAccounts: () => publicFetch('/public/email-accounts'),
     getPlatforms: () => publicFetch('/public/platforms'),
     requestCode: (email, platformName) => {
       const params = new URLSearchParams({ email, platform_name: platformName });

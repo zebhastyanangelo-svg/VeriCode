@@ -1,24 +1,15 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
+import { getPlatformIconUrl, getPlatformFallbackIcon } from '../utils/platformIcons';
 
 export default function PublicCodeRequestPage() {
   const [email, setEmail] = useState('');
   const [platform, setPlatform] = useState('');
-  const [emailAccounts, setEmailAccounts] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const toast = useToast();
-
-  const fetchEmailAccounts = async () => {
-    try {
-      const data = await api.public.getEmailAccounts();
-      setEmailAccounts(data);
-    } catch (err) {
-      setEmailAccounts([]);
-    }
-  };
 
   const fetchPlatforms = async () => {
     try {
@@ -30,7 +21,6 @@ export default function PublicCodeRequestPage() {
   };
 
   useEffect(() => {
-    fetchEmailAccounts();
     fetchPlatforms();
   }, []);
 
@@ -46,7 +36,9 @@ export default function PublicCodeRequestPage() {
         setResult({
           code: response.code,
           email: email,
-          platform_name: response.platform_display_name || response.platform_name,
+          platform_name: response.platform_name,
+          platform_display_name: response.platform_display_name,
+          platform_icon: response.platform_icon,
           received_at: response.received_at,
           sender: response.sender || '',
           subject: response.subject || '',
@@ -108,23 +100,15 @@ export default function PublicCodeRequestPage() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
                 Correo electrónico
               </label>
-              <select
+              <input
                 id="email"
+                type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                placeholder="ejemplo@correo.com"
                 required
                 className="dark-input"
-              >
-                <option value="">Seleccionar correo...</option>
-                {emailAccounts.map(account => (
-                  <option key={account.id} value={account.email}>
-                    {account.email}
-                  </option>
-                ))}
-                {emailAccounts.length === 0 && (
-                  <option value="" disabled>No hay cuentas de correo disponibles</option>
-                )}
-              </select>
+              />
             </div>
 
             <div className="dark-form-group">
@@ -154,7 +138,7 @@ export default function PublicCodeRequestPage() {
             <button
               type="submit"
               className="dark-btn dark-btn-primary dark-btn-lg btn-block"
-              disabled={loading || emailAccounts.length === 0 || platforms.length === 0}
+              disabled={loading || !email || platforms.length === 0}
             >
               {loading ? (
                 <>
@@ -178,9 +162,18 @@ export default function PublicCodeRequestPage() {
                 <span className="live-label">Código encontrado</span>
               </div>
               <div className="live-platform" style={{ marginBottom: 16 }}>
-                <img src={`https://svgl.app/library/${result.platform_name?.toLowerCase()}.svg`} alt={result.platform_name} className="live-icon" onError={(e) => { e.target.style.display = 'none'; }} />
+                {(() => {
+                  const iconUrl = result.platform_icon ? getPlatformIconUrl(result.platform_icon) : null;
+                  return iconUrl ? (
+                    <img src={iconUrl} alt={result.platform_display_name || result.platform_name} className="live-icon" onError={(e) => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div className="live-icon-fallback">
+                      <i className={`fas ${getPlatformFallbackIcon(result.platform_icon)}`} />
+                    </div>
+                  );
+                })()}
                 <div>
-                  <div className="live-name">{result.platform_name || 'N/A'}</div>
+                  <div className="live-name">{result.platform_display_name || result.platform_name || 'N/A'}</div>
                   <div className="live-email">{result.email || 'N/A'}</div>
                 </div>
                 <span className="live-badge">{result.is_read ? 'Leído' : 'Nuevo'}</span>

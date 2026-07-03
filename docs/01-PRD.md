@@ -10,7 +10,7 @@
 
 VeriCode es un sistema ERP-style que automatiza la **recepción, extracción y entrega de códigos de verificación** que llegan a casillas de correo electrónico. Está pensado para negocios que venden o gestionan accesos a plataformas de streaming (Netflix, Disney+, Spotify) e IA (ChatGPT, Claude, Midjourney), y que necesitan entregar esos códigos a sus clientes de forma rápida, confiable y trazable.
 
-> **Problema que resuelve**: hoy los operadores revisan casillas manualmente, copian códigos a mano y se pierden en el camino. VeriCode lo hace **automático**: pollea el correo cada 30 s, detecta el código, lo asocia a la plataforma correcta, y lo entrega al cliente en una pantalla pública.
+> **Problema que resuelve**: hoy los operadores revisan casillas manualmente, copian códigos a mano y se pierden en el camino. VeriCode lo hace **automático**: mantiene conexiones IMAP IDLE persistentes, recibe notificaciones push cuando llega un correo, extrae el código, lo asocia a la plataforma correcta, y lo entrega al cliente en una pantalla pública.
 
 ---
 
@@ -19,7 +19,7 @@ VeriCode es un sistema ERP-style que automatiza la **recepción, extracción y e
 | Persona | Necesidad | Cómo lo usa VeriCode |
 |---------|-----------|----------------------|
 | **Admin / Operador** | Monitorear múltiples casillas, configurar plataformas, ver historial. | Login → Dashboard / Cuentas / Plataformas. |
-| **Cliente final** | Obtener el código que le llegó al correo, sin registrarse. | URL pública → seleccionar su correo + plataforma → ver código. |
+| **Cliente final** | Obtener el código que le llegó al correo, sin registrarse. | URL pública → ingresar su correo + seleccionar plataforma → ver código. |
 | **Manager** | Tener visibilidad de actividad, métricas, quién recibió qué. | Dashboard con stats en tiempo real. |
 
 > El **cliente final NO tiene cuenta**. La URL `/#/code-request` debe ser pública sin auth. *(Ver issue conocido #2 en `06-PLAN.md`)*
@@ -30,7 +30,7 @@ VeriCode es un sistema ERP-style que automatiza la **recepción, extracción y e
 
 ### Objetivo 1: Entrega confiable de códigos
 
-- **KR1**: ≥ 99% de códigos recibidos → entregados al cliente en < 60 s tras su llegada al buzón.
+- **KR1**: ≥ 99% de códigos recibidos → entregados al cliente en < 10 s tras su llegada al buzón (IMAP IDLE lo reduce a ~1 s).
 - **KR2**: 0% de códigos entregados a plataforma equivocada.
 - **KR3**: Todos los códigos quedan trazados (auditoría: `is_delivered`, `delivered_to`, `delivered_at`).
 
@@ -71,11 +71,11 @@ VeriCode es un sistema ERP-style que automatiza la **recepción, extracción y e
 - Mensaje de éxito/error claro.
 
 ### US-2 — Cliente pide su código
-> Como **cliente**, quiero entrar a una página pública, elegir mi correo y plataforma, y ver mi código.
+> Como **cliente**, quiero entrar a una página pública, ingresar mi correo, elegir la plataforma, y ver mi código.
 
 **Criterios de aceptación**:
 - URL pública, sin login.
-- Select de correos (solo `is_active=True`).
+- Input de email (type="email", sin lista de correos registrados).
 - Select de plataformas (solo `is_active=True`).
 - Sistema busca el código más reciente, lo muestra prominentemente.
 - Si no hay código → mensaje claro.
@@ -122,7 +122,7 @@ Login admin → Plataformas → Verificar que Netflix/Disney+ están precargadas
 
 ### Flujo C — Operación interna
 ```
-[Poller cada 30s] revisa IMAP → extrae código → lo persiste → notifica WS
+[IMAP IDLE] recibe push notification → extrae código → lo persiste → notifica WS
 [Dashboard admin] lo muestra en vivo
 ```
 
@@ -134,7 +134,7 @@ Login admin → Plataformas → Verificar que Netflix/Disney+ están precargadas
 
 | Métrica | Cómo se mide | Target |
 |---------|--------------|--------|
-| Latencia IMAP → UI | `received_at - created_at` | < 5 s |
+| Latencia IMAP → UI | `received_at - created_at` | < 2 s (IDLE push) |
 | Códigos correctamente clasificados | % códigos con `platform_id` no nulo | ≥ 95% |
 | Uptime del poller | Logs de watchdog | ≥ 99% |
 | Satisfacción del operador | NPS informal | — |
@@ -146,7 +146,7 @@ Login admin → Plataformas → Verificar que Netflix/Disney+ están precargadas
 | Riesgo | Impacto | Mitigación |
 |--------|---------|------------|
 | Contraseña IMAP comprometida | Alto | Cifrar `password_encrypted` en BD (bcrypt con salt único o `cryptography.fernet`). |
-| IMAP rate-limiting del proveedor | Medio | Poller configurable (default 30s), backoff exponencial si falla. |
+| IMAP rate-limiting del proveedor | Medio | IMAP IDLE timeout configurable (default 1680s), reconexión automática con backoff. |
 | Cambio de remitente por proveedor | Medio | Diccionario `PLATFORM_PATTERNS` actualizable + campo `sender_pattern` por plataforma. |
 | Pérdida de conexión WS | Bajo | Reconexión automática cada 5 s en cliente. |
 

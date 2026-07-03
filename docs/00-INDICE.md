@@ -23,11 +23,11 @@
 **VeriCode** es un sistema que:
 
 1. **Recibe** códigos de verificación vía correos IMAP (Gmail, Outlook, etc.).
-2. **Procesa** automáticamente cada 30 segundos extrayendo el código (regex) y asociándolo a su plataforma.
+2. **Procesa** en tiempo real mediante conexiones IMAP IDLE persistentes, extrayendo el código (regex) y asociándolo a su plataforma.
 3. **Entrega** el código al usuario final mediante una URL pública sin login.
 
 **Casos de uso principales**:
-- Un cliente necesita el código de Netflix que llegó a su casilla → entra a `/#/code-request`, elige su email + Netflix → recibe el código.
+- Un cliente necesita el código de Netflix que llegó a su casilla → entra a `/#/code-request`, ingresa su email + selecciona Netflix → recibe el código.
 - El admin configura qué casillas IMAP se monitorean y qué plataformas se reconocen (`Plataformas`).
 - El dashboard muestra todos los códigos en tiempo real vía WebSocket.
 
@@ -52,7 +52,7 @@
 │  Frontend (React 19 + Vite 8 + FontAwesome)   │
 ├──────────────────────────────────────────────┤
 │  Backend (FastAPI 0.138 + SQLAlchemy 2.0)     │
-│  ├─ IMAP Poller (cada 30s)                     │
+│  ├─ IMAP IDLE Watcher (aioimaplib, push)        │
 │  ├─ JWT Auth (bcrypt + HS256 + must_change)    │
 │  └─ WebSocket /codes/ws                        │
 ├──────────────────────────────────────────────┤
@@ -68,7 +68,7 @@
 | **Render** | Backend FastAPI | Free Web Service (512 MB, duerme tras 15 min sin tráfico inbound) |
 | **Supabase** | PostgreSQL managed | Free (500 MB, pausa tras 1 semana sin actividad) |
 
-> 📘 Setup paso-a-paso en [`docs/07-DEPLOY.md`](07-DEPLOY.md). Gotchas críticos: Render free tier es IPv4-only (usar Supabase pooler puerto **6543**, no 5432), y Render duerme por inactividad HTTP (cron externo cada ~14 min para evitarlo).
+> 📘 Setup paso-a-paso en [`docs/07-DEPLOY.md`](07-DEPLOY.md). Gotchas críticos: Render free tier es IPv4-only (usar Supabase pooler puerto **6543**, no 5432), y Render duerme por inactividad HTTP (el frontend hace ping cada 5 min + cron externo opcional para evitarlo).
 
 ---
 
@@ -77,10 +77,10 @@
 | Aspecto | Estado | Notas |
 |---------|--------|-------|
 | backend (API + DB) | ✅ Funcional | Modelos, schemas, CRUD completos |
-| IMAP poller | ⚠️ Funcional con bugs | Fix thread-safety aplicado, requiere validación real |
+| IMAP IDLE Watcher | ✅ Funcional | aioimaplib, conexiones persistentes, push en tiempo real |
 | Auth JWT | ✅ Funcional | Admin user se crea con `GET /auth/setup` |
 | Frontend admin | ✅ Funcional | Login, Dashboard, Cuentas, Plataformas |
-| Frontend público | ⚠️ Bloqueado por auth | `/#/code-request` requiere login — bug |
+| Frontend público | ✅ Funcional | `/#/code-request` público, input email + select plataforma |
 | Detección plataforma | ✅ Mejorada | Estrategia primaria: `account.platform_id`, fallback: regex |
 | Auto-docs (Swagger) | ✅ `/docs` | Habilitado por FastAPI |
 

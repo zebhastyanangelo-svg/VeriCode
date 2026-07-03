@@ -37,7 +37,7 @@
 │  └─────────────────────────────────────────────────────────┘     │
 │  ┌─────────────────────────────────────────────────────────┐     │
 │  │ Services                                                 │     │
-│  │  • IMAPPoller  → background asyncio task (loop 30 s)     │     │
+│  │  • IMAP IDLE Watcher → aioimaplib, push, persistente    │     │
 │  │  • code_extractor → regex                                    │     │
 │  └─────────────────────────────────────────────────────────┘     │
 │  ┌─────────────────────────────────────────────────────────┐     │
@@ -77,6 +77,7 @@
 | cryptography | 49.0.0 | TLS / future Fernet |
 | alembic | 1.18.5 | Migrations (no inicializadas) |
 | websockets | ≥16.0 | WS support FastAPI |
+| aioimaplib | ≥2.0.0 | Cliente IMAP asíncrono con IDLE (RFC 2177) |
 
 ### Frontend (`frontend/package.json`)
 
@@ -120,7 +121,8 @@ Las variables se setean en el dashboard de Render, no en `.env`. Mínimo obligat
 | `DATABASE_URL` | `postgresql://postgres.[ref]:[pw]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require` | **Pooler puerto 6543** (ver docs/07-DEPLOY.md §1) |
 | `CORS_ORIGINS` | `https://app.tu-dominio.com` | NO usar `*` en prod |
 | `TRUSTED_PROXIES` | `*` | Detrás de Render LB, todas las IPs son proxy confiable |
-| `POLL_INTERVAL_SECONDS` | `30` | |
+| `POLL_INTERVAL_SECONDS` | `30` | Mantenido por retrocompatibilidad (no usado por IDLE) |
+| `IMAP_IDLE_TIMEOUT` | `1680` | Tiempo máximo del ciclo IDLE (RFC 2177, máx 29 min = 1740 s) |
 | `AUTH_RATE_LIMIT_MAX_ATTEMPTS` | `5` | |
 | `AUTH_RATE_LIMIT_WINDOW_MINUTES` | `15` | |
 
@@ -212,10 +214,10 @@ Prefijo: `/api/v1`
 
 | Método | Endpoint | Función |
 |--------|----------|---------|
-| GET | `/public/email-accounts` | Lista correos activos |
+| GET | `/public/ping` | Health-check (sin auth, sin DB). Usado por frontend como keep-alive cada 5 min |
 | GET | `/public/platforms` | Lista plataformas activas |
 | GET | `/public/verify-email-access` | Verifica combinación email + platform + devuelve código |
-| POST | `/public/request-code` | Solicita código (alias que llama `verify-email-access`) |
+| POST | `/public/request-code` | Solicita código |
 
 ---
 
@@ -303,8 +305,9 @@ cd frontend && npm install && npm run dev
 |----------|---------|-----------|
 | SQLite en dev | Cero config para arrancar | Solo single-instance; usar PG para multi. |
 | Hash-routing manual | SPA simple, sin necesidad de server config | Menos features que React Router (sin nested). |
-| IMAP poller (no IDLE) | Funciona con todos los proveedores, sin libs extra | Latencia hasta 30 s; IDLE mejora pero requiere pyimap/asyncimap. |
-| Polling cada 30 s | Balance entre frescura y carga | Configurable vía `POLL_INTERVAL_SECONDS`. |
+| IMAP IDLE (RFC 2177) | Notificaciones push en tiempo real (~1 s). Sin carga de polling. | Requiere `aioimaplib`. Reconexión automática. |
+| IMAP IDLE timeout 1680 s | Por defecto 28 min (RFC 2177 máx 29 min). Configurable vía `IMAP_IDLE_TIMEOUT`. | Tras el timeout se re-entra en IDLE automáticamente. |
+| Polling legacy | Mantenido vía `POLL_INTERVAL_SECONDS` para retrocompatibilidad. | El poller ya no usa este valor. |
 | `account.platform_id nullable` | Permite cuentas multi-plataforma (auto-detect) | Más complejo que 1:1 estricto. |
 | Diccionario `PLATFORM_PATTERNS` hardcodeado | Cubre los casos más comunes out-of-the-box | Hay que actualizarlo cuando cambian remitentes. |
 | `USERS_DB` en memoria (no BD) | Simple para v1 | Se pierde al reiniciar — fix: mover a tabla `users`. |

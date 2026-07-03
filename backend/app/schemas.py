@@ -142,6 +142,7 @@ class VerificationCodeOut(BaseModel):
     created_at: datetime
     email: Optional[str] = None
     platform_name: Optional[str] = None
+    platform_icon: Optional[str] = None
 
     class Config:
         from_attributes = True

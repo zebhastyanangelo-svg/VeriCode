@@ -123,6 +123,7 @@ async def request_code(
         "platform_name": platform.name,
         "platform_display_name": platform.display_name,
         "platform_id": platform.id,
+        "platform_icon": platform.icon,
         "code_id": code.id,
         "is_read": code.is_read,
         "is_delivered": True,

@@ -154,7 +154,8 @@ Definidas en `frontend/src/index.css`:
 │  Introduce tus datos...      │
 │                              │
 │  ✉  Correo:                  │
-│    [select correos activos]  │
+│    [input type="email"       │
+│     placeholder="ejemplo@correo.com"] │
 │                              │
 │  📚 Plataforma:              │
 │    [select plataformas]      │

@@ -23,7 +23,7 @@
 | Admin se crea | ⚠️ manual `GET /auth/setup` | ✅ auto en `lifespan` |
 | Casilla IMAP se configura | ✅ | ✅ |
 | Casilla → plataforma asignada | ⚠️ solo auto-detect | ✅ manual + fallback |
-| Poller detecta códigos cada 30 s | ✅ | ✅ |
+| IMAP IDLE detecta códigos en tiempo real (push) | ✅ | ✅ |
 | WS notifica nuevos códigos | ✅ | ✅ |
 | Frontend admin funciona | ✅ | ✅ |
 | **Cliente final entra sin login** | ❌ bloqueado | ✅ acceso público |

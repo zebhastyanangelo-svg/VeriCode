@@ -96,7 +96,8 @@
    | `BOOTSTRAP_TOKEN` | `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
    | `CORS_ORIGINS` | `https://app.tu-dominio.com,https://app.tu-dominio.onrender.com` |
    | `TRUSTED_PROXIES` | `*` |
-   | `POLL_INTERVAL_SECONDS` | `30` |
+    | `POLL_INTERVAL_SECONDS` | `30` | (retrocompatibilidad, no usado por IDLE) |
+    | `IMAP_IDLE_TIMEOUT` | `1680` | Tiempo máximo ciclo IDLE por cuenta (RFC 2177, máx 29 min) |
    | `AUTH_RATE_LIMIT_MAX_ATTEMPTS` | `5` |
    | `AUTH_RATE_LIMIT_WINDOW_MINUTES` | `15` |
    | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` |
@@ -156,9 +157,7 @@
 
 ## 3. Cron keep-alive (CRÍTICO para Render free)
 
-Por defecto, Render apaga tu Web Service tras **15 minutos sin tráfico HTTP inbound**. Como nuestro IMAP poller hace conexiones outbound (IMAP, Supabase), Render no las considera actividad y el proceso muere. Esto interrumpe:
-- Recepción de códigos (poller parado).
-- WebSockets activos (clientes desconectados).
+Por defecto, Render apaga tu Web Service tras **15 minutos sin tráfico HTTP inbound**. El frontend ya hace ping interno cada 5 min a `GET /api/v1/public/ping`, y el IMAP IDLE watcher mantiene conexiones outbound, pero Render aún puede dormir el proceso si detecta inactividad. El cron externo es la capa de seguridad adicional.
 
 **Solución**: un cron externo que haga GET a tu backend cada 14 minutos.
 
@@ -166,7 +165,7 @@ Por defecto, Render apaga tu Web Service tras **15 minutos sin tráfico HTTP inb
 
 1. Crear cuenta en https://cron-job.org (free, sin límite práctico de jobs).
 2. Create cronjob:
-   - URL: `https://api.tu-dominio.com/api/v1/public/email-accounts` (cualquier endpoint público sirve como probe).
+    - URL: `https://api.tu-dominio.com/api/v1/public/ping` (endpoint público de health-check, sin DB).
    - Interval: every **14 minutes** (cron-job.org sí permite intervalos impares en el free tier).
 3. El cron pingea tu backend cada 14 min → Render nunca duerme → poller IMAP siempre vivo.
 
@@ -280,9 +279,9 @@ El rate-limit, el ConnectionManager del WS y el IMAP poller son **in-memory**. R
 - Upstash Redis (free tier): 10k cmd/día, suficiente para rate-limit compartido.
 - Cloudflare Pages sigue siendo free (ilimitado).
 
-### 7.2. IMAP sin backoff exponencial
+### 7.2. IMAP IDLE watcher sin backoff exponencial
 
-Si una cuenta IMAP rechaza conexión (CUPS, ISP throttling), el poller reintenta cada 30 s sin escalonar. No es crítico en free tier (10 cuentas < 100 emails/día fácil), pero en Producción real conviene agregar backoff por cuenta.
+Si una cuenta IMAP rechaza conexión (CUPS, ISP throttling), el watcher reconecta automáticamente pero sin backoff escalonado (reintenta cada 10 s). No es crítico en free tier (10 cuentas < 100 emails/día fácil), pero en Producción real conviene agregar backoff por cuenta.
 
 ### 7.3. JWT sin refresh tokens
 

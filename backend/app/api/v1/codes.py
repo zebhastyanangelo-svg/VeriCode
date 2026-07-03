@@ -70,6 +70,7 @@ def _to_out(c) -> dict:
         created_at=c.created_at,
         email=c.email_account.email if c.email_account else None,
         platform_name=c.platform.display_name if c.platform else None,
+        platform_icon=c.platform.icon if c.platform else None,
     )
 
 

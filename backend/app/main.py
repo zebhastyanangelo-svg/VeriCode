@@ -326,6 +326,7 @@ def broadcast_new_code_handler(code, db):
             "sender": code.sender,
             "subject": code.subject,
             "platform_name": code.platform.display_name if code.platform else "Desconocida",
+            "platform_icon": code.platform.icon if code.platform else None,
             "email": code.email_account.email if code.email_account else "",
             "received_at": code.received_at.isoformat() if code.received_at else None,
         })

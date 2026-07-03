@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: vericode-backend
+    runtime: python
+    region: us-east-2
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/v1/public/ping
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: VERICODE_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FERNET_KEY
+        generateValue: true
+      - key: BOOTSTRAP_TOKEN
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://vericode.dpdns.org
+      - key: TRUSTED_PROXIES
+        value: "*"
+      - key: REAL_IP_HEADER
+        value: X-Forwarded-For
+      - key: IMAP_IDLE_TIMEOUT
+        value: "1680"
+      - key: AUTH_RATE_LIMIT_MAX_ATTEMPTS
+        value: "5"
+      - key: AUTH_RATE_LIMIT_WINDOW_MINUTES
+        value: "15"

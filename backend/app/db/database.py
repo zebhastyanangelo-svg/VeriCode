@@ -3,7 +3,22 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.config import settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+
+def _create_engine():
+    url = settings.database_url
+    if url.startswith("postgresql"):
+        return create_engine(
+            url,
+            pool_size=1,
+            max_overflow=0,
+            pool_pre_ping=True,
+            pool_recycle=300,
+            connect_args={"connect_timeout": 10},
+        )
+    return create_engine(url, pool_pre_ping=True)
+
+
+engine = _create_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

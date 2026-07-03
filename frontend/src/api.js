@@ -143,6 +143,8 @@ export const api = {
     return `${base}/codes/ws?token=${encodeURIComponent(t)}`;
   },
 
+  ping: () => publicFetch('/public/ping'),
+
   public: {
     getEmailAccounts: () => publicFetch('/public/email-accounts'),
     getPlatforms: () => publicFetch('/public/platforms'),

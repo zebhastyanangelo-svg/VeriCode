@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { api } from './api';
 import Navbar from './components/Navbar';
 import Loading from './components/Loading';
 import LandingPage from './pages/LandingPage';
@@ -31,6 +32,13 @@ function AppContent() {
     const onHashChange = () => setHash(window.location.hash.slice(1) || '/');
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  useEffect(() => {
+    const ping = () => { api.ping().catch(() => {}); };
+    ping();
+    const id = setInterval(ping, 5 * 60 * 1000);
+    return () => clearInterval(id);
   }, []);
 
   if (loading) return <Loading text="Cargando..." />;

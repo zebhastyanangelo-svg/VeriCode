@@ -13,6 +13,13 @@ from app.schemas import EmailAccountOut, PlatformOut
 router = APIRouter(prefix="/public", tags=["public"])
 
 
+@router.get("/ping")
+async def ping():
+    """Health-check mínimo. Sin auth, sin DB. Usado por el frontend como
+    keep-alive cada 5 min para evitar que Render free tier duerma el backend."""
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+
 def _sanitize_email_address(raw: str) -> str:
     if not raw:
         return ""

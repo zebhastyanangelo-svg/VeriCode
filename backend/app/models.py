@@ -111,6 +111,7 @@ class VerificationCode(Base):
     delivered_to = Column(String(255), nullable=True)
     delivered_at = Column(DateTime, nullable=True)
     received_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     email_account = relationship("EmailAccount", back_populates="codes")

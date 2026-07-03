@@ -2,7 +2,7 @@ import asyncio
 import email
 import imaplib
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.header import decode_header, make_header
 from typing import Optional
 
@@ -23,6 +23,8 @@ class IMAPPoller:
         self.callbacks: list = []
         self._tasks: dict[int, asyncio.Task] = {}
         self._lock = asyncio.Lock()
+        self._processing_locks: dict[int, asyncio.Lock] = {}
+        self._processing_locks_lock = asyncio.Lock()
 
     def on_new_code(self, callback_factory):
         self.callbacks.append(callback_factory)
@@ -178,12 +180,22 @@ class IMAPPoller:
         return messages
 
     # ---------------------------------------------------------------
+    # Per-account processing lock (evita concurrencia IDLE + poll manual)
+    # ---------------------------------------------------------------
+    async def _get_account_lock(self, account_id: int) -> asyncio.Lock:
+        async with self._processing_locks_lock:
+            if account_id not in self._processing_locks:
+                self._processing_locks[account_id] = asyncio.Lock()
+            return self._processing_locks[account_id]
+
+    # ---------------------------------------------------------------
     # Shared processing logic
     # ---------------------------------------------------------------
     def _process_messages(self, messages: list[dict], account_id: int,
                           platforms: list[Platform], account: EmailAccount,
                           db: Session) -> list[VerificationCode]:
         saved_codes = []
+        now = datetime.utcnow()
         for msg_data in messages:
             platform = account.platform
             if platform is None:
@@ -200,6 +212,7 @@ class IMAPPoller:
             ).first()
 
             if not existing:
+                received_at = _parse_date(msg_data.get("date")) or now
                 new_code = VerificationCode(
                     email_account_id=account_id,
                     platform_id=platform.id if platform else None,
@@ -207,7 +220,8 @@ class IMAPPoller:
                     subject=msg_data["subject"][:500] if msg_data["subject"] else None,
                     code=code_value,
                     raw_body=msg_data["body"][:5000],
-                    received_at=_parse_date(msg_data.get("date")) or datetime.utcnow(),
+                    received_at=received_at,
+                    expires_at=received_at + timedelta(minutes=settings.code_expiration_minutes),
                 )
                 db.add(new_code)
                 saved_codes.append(new_code)
@@ -226,34 +240,36 @@ class IMAPPoller:
     # One-shot poll (manual / fallback)
     # ---------------------------------------------------------------
     async def process_account(self, account_id: int, db: Session):
-        def _load_account():
-            return db.query(EmailAccount).filter(EmailAccount.id == account_id).first()
+        lock = await self._get_account_lock(account_id)
+        async with lock:
+            def _load_account():
+                return db.query(EmailAccount).filter(EmailAccount.id == account_id).first()
 
-        account = await asyncio.to_thread(_load_account)
-        if not account or not account.is_active:
-            return
+            account = await asyncio.to_thread(_load_account)
+            if not account or not account.is_active:
+                return
 
-        mail = await self.connect_account(account)
-        if not mail:
-            return
+            mail = await self.connect_account(account)
+            if not mail:
+                return
 
-        messages = await self.fetch_unread(mail)
-        try:
-            await asyncio.to_thread(mail.logout)
-        except Exception:
-            pass
+            messages = await self.fetch_unread(mail)
+            try:
+                await asyncio.to_thread(mail.logout)
+            except Exception:
+                pass
 
-        def _load_platforms():
-            return db.query(Platform).all()
+            def _load_platforms():
+                return db.query(Platform).all()
 
-        platforms = await asyncio.to_thread(_load_platforms)
-        self._process_messages(messages, account_id, platforms, account, db)
+            platforms = await asyncio.to_thread(_load_platforms)
+            self._process_messages(messages, account_id, platforms, account, db)
 
-        def _update_checked():
-            account.last_checked = datetime.utcnow()
-            db.commit()
+            def _update_checked():
+                account.last_checked = datetime.utcnow()
+                db.commit()
 
-        await asyncio.to_thread(_update_checked)
+            await asyncio.to_thread(_update_checked)
 
     # ---------------------------------------------------------------
     # IDLE watcher por cuenta
@@ -294,9 +310,11 @@ class IMAPPoller:
                             await asyncio.wait_for(idle_task, timeout=5)
                             messages = await self._fetch_unread_idle(client)
                             if messages:
-                                self._process_messages(
-                                    messages, account_id, platforms, account, db
-                                )
+                                lock = await self._get_account_lock(account_id)
+                                async with lock:
+                                    self._process_messages(
+                                        messages, account_id, platforms, account, db
+                                    )
                     except (asyncio.TimeoutError, asyncio.CancelledError):
                         try:
                             client.idle_done()
@@ -306,9 +324,11 @@ class IMAPPoller:
                         if self.running:
                             messages = await self._fetch_unread_idle(client)
                             if messages:
-                                self._process_messages(
-                                    messages, account_id, platforms, account, db
-                                )
+                                lock = await self._get_account_lock(account_id)
+                                async with lock:
+                                    self._process_messages(
+                                        messages, account_id, platforms, account, db
+                                    )
 
             except asyncio.CancelledError:
                 break

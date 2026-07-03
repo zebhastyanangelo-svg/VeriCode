@@ -122,3 +122,25 @@ def record_login_success(ip: str) -> None:
 def reset_login_limiter() -> None:
     """Para tests: limpia el estado entre corridas."""
     _login_limiter._buckets.clear()
+
+
+# ---------------------------------------------------------------------------
+# Rate-limit público (request-code, verify-email-access)
+# ---------------------------------------------------------------------------
+_public_limiter = SlidingWindowLimiter(
+    max_attempts=settings.public_rate_limit_max_attempts,
+    window_seconds=settings.public_rate_limit_window_minutes * 60,
+)
+
+
+def check_public_allowed(ip: str) -> tuple[bool, int]:
+    """Devuelve (permitido, retry_after_seconds)."""
+    return _public_limiter.allow(ip, "public"), _public_limiter.retry_after_seconds(ip, "public")
+
+
+def record_public_request(ip: str) -> None:
+    _public_limiter.record_failure(ip, "public")
+
+
+def reset_public_limiter() -> None:
+    _public_limiter._buckets.clear()

@@ -1,6 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,7 @@ from app.config import (
 )
 from app.core import cache as app_cache
 from app.db.database import Base, engine, SessionLocal
-from app.models import Platform, User
+from app.models import Platform, User, VerificationCode
 from app.services.imap_poller import poller_instance as poller
 
 
@@ -51,10 +52,6 @@ def _run_user_migrations() -> None:
     cols = {c["name"] for c in inspector.get_columns("users")}
     statements: list[str] = []
     if "must_change_password" not in cols:
-        # DEFAULT TRUE → cualquier usuario existente queda marcado
-        # para forzar el cambio de password en el próximo login.
-        # Sintaxis portable SQLite/Postgres (el default `1`/`0` sería
-        # rechazado por Postgres con un cast implícito).
         statements.append(
             "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT TRUE"
         )
@@ -64,9 +61,23 @@ def _run_user_migrations() -> None:
                 try:
                     conn.execute(text(stmt))
                 except Exception as e:
-                    # Carrera con otra instancia o schema ya migrado: log
-                    # informativo, no fatal.
                     print(f"⚠️  Migration skipped ({e.__class__.__name__}): {stmt}")
+
+    # Migración específica para verification_codes.expires_at
+    if "verification_codes" in inspector.get_table_names():
+        vc_cols = {c["name"] for c in inspector.get_columns("verification_codes")}
+        vc_statements: list[str] = []
+        if "expires_at" not in vc_cols:
+            vc_statements.append(
+                "ALTER TABLE verification_codes ADD COLUMN expires_at TIMESTAMP"
+            )
+        if vc_statements:
+            with engine.begin() as conn:
+                for stmt in vc_statements:
+                    try:
+                        conn.execute(text(stmt))
+                    except Exception as e:
+                        print(f"⚠️  VC Migration skipped ({e.__class__.__name__}): {stmt}")
 
 
 def _production_guards() -> None:
@@ -181,6 +192,40 @@ def _print_startup_banner() -> None:
     print("─" * 60)
 
 
+async def _cleanup_task():
+    """Limpieza periódica: purga códigos viejos y anonymiza raw_body."""
+    while True:
+        try:
+            await asyncio.sleep(settings.cleanup_interval_minutes * 60)
+            db = SessionLocal()
+            try:
+                now = datetime.utcnow()
+                # Anonymizar raw_body de códigos con más de raw_body_retention_minutes
+                cutoff_raw = now - timedelta(minutes=settings.raw_body_retention_minutes)
+                db.query(VerificationCode).filter(
+                    VerificationCode.received_at < cutoff_raw,
+                    VerificationCode.raw_body.isnot(None),
+                ).update(
+                    {VerificationCode.raw_body: None},
+                    synchronize_session=False,
+                )
+                # Eliminar códigos más antiguos que code_retention_days
+                cutoff_delete = now - timedelta(days=settings.code_retention_days)
+                deleted = db.query(VerificationCode).filter(
+                    VerificationCode.received_at < cutoff_delete
+                ).delete(synchronize_session=False)
+                db.commit()
+                if deleted:
+                    print(f"  🧹 Limpieza: {deleted} códigos antiguos purgados")
+            except Exception as e:
+                print(f"  ⚠️ Error en limpieza: {e}")
+                db.rollback()
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            break
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Validar secrets al arranque. Modo estricto se activa automáticamente
@@ -215,8 +260,11 @@ async def lifespan(app: FastAPI):
     # Registrar el handler y arrancar IDLE watchers.
     poller.on_new_code(broadcast_new_code_handler)
     await poller.start()
+    # Arrancar tarea de limpieza en segundo plano
+    cleanup = asyncio.create_task(_cleanup_task())
     yield
     poller.stop()
+    cleanup.cancel()
 
 
 app = FastAPI(

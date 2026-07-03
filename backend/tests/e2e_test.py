@@ -37,18 +37,24 @@ MOCK_IMAP_PORT = 1143
 # ===================== Mock IMAP Server =====================
 
 # El "correo" que el mock devolverá: contiene un código de Netflix.
-MOCK_EMAIL_RAW = (
-    b"From: info@account.netflix.com\r\n"
-    b"Subject: Tu c\xc3\xb3digo de verificaci\xc3\xb3n de Netflix\r\n"
-    b"To: test@mock.local\r\n"
-    b"Date: Mon, 1 Jan 2024 12:00:00 +0000\r\n"
-    b"Content-Type: text/plain; charset=utf-8\r\n"
-    b"Content-Transfer-Encoding: 7bit\r\n"
-    b"Message-ID: <test-001@netflix.com>\r\n"
-    b"\r\n"
-    b"Hola! Tu c\xc3\xb3digo de verificaci\xc3\xb3n de Netflix es: 778899. "
-    b"No lo compartas con nadie.\r\n"
-)
+def _make_mock_email():
+    import datetime as _dt
+    _now = _dt.datetime.utcnow()
+    _date_str = _now.strftime("%a, %d %b %Y %H:%M:%S +0000")
+    parts = [
+        b"From: info@account.netflix.com\r\n",
+        b"Subject: Tu c\xc3\xb3digo de verificaci\xc3\xb3n de Netflix\r\n",
+        b"To: test@mock.local\r\n",
+        f"Date: {_date_str}\r\n".encode(),
+        b"Content-Type: text/plain; charset=utf-8\r\n",
+        b"Content-Transfer-Encoding: 7bit\r\n",
+        b"Message-ID: <test-001@netflix.com>\r\n",
+        b"\r\n",
+        b"Hola! Tu c\xc3\xb3digo de verificaci\xc3\xb3n de Netflix es: 778899. "
+        b"No lo compartas con nadie.\r\n",
+    ]
+    return b"".join(parts)
+MOCK_EMAIL_RAW = _make_mock_email()
 
 
 async def _mock_imap_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -454,9 +460,76 @@ async def test_poll_extracts_code_and_broadcasts(
                 pass
 
 
+def test_verify_email_access_info_leak_fix(runner: TestRunner) -> None:
+    """verify-email-access no revela si un correo está registrado."""
+    with runner.step("T8: verify-email-access sin fuga de información"):
+        r_unknown = requests.get(
+            f"{BACKEND_URL}/api/v1/public/verify-email-access",
+            params={"email": "no-existe@nadie.com", "platform_name": "netflix"},
+            timeout=5.0,
+        )
+        assert r_unknown.status_code == 200, (
+            f"Esperaba 200 (no 404) para email inexistente: "
+            f"status={r_unknown.status_code} body={r_unknown.text}"
+        )
+        body = r_unknown.json()
+        assert body.get("has_access") is False, (
+            f"has_access debe ser False para email no registrado: {body}"
+        )
+        # No debe contener información del código
+        assert "code" not in body, f"No debe exponer code: {body}"
+        assert "code_id" not in body, f"No debe exponer code_id: {body}"
+        print(f"   ✓ Email no registrado: has_access=False (respuesta uniforme)", flush=True)
+
+        r_real = requests.get(
+            f"{BACKEND_URL}/api/v1/public/verify-email-access",
+            params={"email": "test@mock.local", "platform_name": "netflix"},
+            timeout=5.0,
+        )
+        assert r_real.status_code == 200, (
+            f"verify-email-access para email real esperaba 200: "
+            f"status={r_real.status_code} body={r_real.text}"
+        )
+        body_real = r_real.json()
+        # Puede ser has_access=True o False (si no hay código disponible)
+        assert "has_access" in body_real, f"Falta has_access en respuesta: {body_real}"
+        assert "code" not in body_real, f"No debe exponer code: {body_real}"
+        print(f"   ✓ Email real: has_access={body_real.get('has_access')} (sin code)", flush=True)
+
+
+def test_public_rate_limit(runner: TestRunner) -> None:
+    """Test que el rate-limit público funciona."""
+    with runner.step("T9: Rate-limit público (10/min) bloquea tras exceder"):
+        # Resetear el rate-limit público
+        rr = requests.post(
+            f"{BACKEND_URL}/api/v1/public/_test/reset-rate-limit",
+            timeout=5.0,
+        )
+        assert rr.status_code == 200, f"reset falló: {rr.status_code} {rr.text}"
+
+        # Hacemos 11 requests rápidos a verify-email-access con email inexistente
+        statuses = []
+        for i in range(11):
+            r = requests.get(
+                f"{BACKEND_URL}/api/v1/public/verify-email-access",
+                params={"email": f"rate-test-{i}@example.com", "platform_name": "netflix"},
+                timeout=5.0,
+            )
+            statuses.append(r.status_code)
+        first_10 = statuses[:10]
+        eleventh = statuses[10]
+        assert all(s == 200 for s in first_10), (
+            f"Primeros 10 requests deberían ser 200: {first_10}"
+        )
+        assert eleventh == 429, (
+            f"11er request debería ser 429, obtuvo {eleventh}: statuses={statuses}"
+        )
+        print(f"   ✓ Rate-limit público: 10×200 + 1×429", flush=True)
+
+
 def test_public_request_code(runner: TestRunner, token: str) -> None:
     """Endpoint público sirve código y lo marca como entregado."""
-    with runner.step("T8: Endpoint público sirve código y marca is_delivered=True"):
+    with runner.step("T10: Endpoint público sirve código y marca is_delivered=True"):
         # request-code usa Query params: email + platform_name (no platform_id, no JSON body).
         r_req = requests.post(
             f"{BACKEND_URL}/api/v1/public/request-code",
@@ -490,7 +563,7 @@ def test_public_request_code(runner: TestRunner, token: str) -> None:
 
 def test_change_password_wrong_old(runner: TestRunner, token: str) -> None:
     """Cambio de password con old_password incorrecta debe rechazarse con 401."""
-    with runner.step("T9: /auth/change-password rechaza old_password incorrecta"):
+    with runner.step("T11: /auth/change-password rechaza old_password incorrecta"):
         r = requests.post(
             f"{BACKEND_URL}/api/v1/auth/change-password",
             json={"old_password": "ESTA-NO-ES-LA-ACTUAL", "new_password": "AnotherSecure!42"},
@@ -505,7 +578,7 @@ def test_change_password_wrong_old(runner: TestRunner, token: str) -> None:
 
 def test_rate_limit_blocks_after_5_failures(runner: TestRunner) -> None:
     """5 intentos fallidos desde misma IP → 6to debe ser 429 con Retry-After."""
-    with runner.step("T10: Rate-limit (5/15min) → 6to intento devuelve 429"):
+    with runner.step("T12: Rate-limit (5/15min) → 6to intento devuelve 429"):
         # Limpiamos el bucket de cualquier test previo para empezar limpio.
         requests.post(
             f"{BACKEND_URL}/api/v1/auth/_test/reset-rate-limit",
@@ -569,7 +642,7 @@ def test_timing_oracle_equalized(runner: TestRunner) -> None:
     que la diferencia entre avg(latencia_exist) - avg(latencia_no_exist)
     sea < 200ms (fuera del rango detectable).
     """
-    with runner.step("T11: Timing oracle defense (bcrypt siempre corre)"):
+    with runner.step("T13: Timing oracle defense (bcrypt siempre corre)"):
         _reset_rate_limit_for_test()
 
         # 5 intentos con username inexistente → debería tardar ~bcrypt cada uno.
@@ -648,7 +721,7 @@ def test_xff_spoof_rejected(runner: TestRunner) -> None:
     bucket separado para "1.2.3.4" y el 6to ataque (sin spoof, cliente
     real 127.0.0.1) sería 401, NO 429.
     """
-    with runner.step("T12: X-Forwarded-For spoof no bypasa rate-limit (trusted_proxies vacío)"):
+    with runner.step("T14: X-Forwarded-For spoof no bypasa rate-limit (trusted_proxies vacío)"):
         # Password ≥6 chars para evitar 422 del schema.
         for spoof_ip in ("1.2.3.4", "5.6.7.8"):
             _reset_rate_limit_for_test()
@@ -700,7 +773,7 @@ def test_backend_blocks_stale_jwt_with_password_change(runner: TestRunner) -> No
       1) Reset BD + restart implícito (no necesario, sólo cambiamos flag).
       2) Cambiar admin password a algo fijo DEJANDO must_change_password=True
          (setearlo manualmente a True vía un endpoint de testing o SQL).
-         Alternativamente: usar el flag con T9 que test_login_admin ya
+         Alternativamente: usar el flag con T11 que test_login_admin ya
          cambió el flag a False, así que necesitamos re-bajar el flag a True.
          Vamos por SQL directo a la BD del backend — pero la BD está en el
          proceso del backend, separada de nuestro test. Solución:
@@ -716,7 +789,7 @@ def test_backend_blocks_stale_jwt_with_password_change(runner: TestRunner) -> No
       ⇒ Otra solución: lanzar un proceso Python independiente que conecte a
       la BD y setee must_change_password=True. Sí, simple.
     """
-    with runner.step("T13a: Backend bloquea endpoints protegidos con flag=True"):
+    with runner.step("T15a: Backend bloquea endpoints protegidos con flag=True"):
         # Paso 1: subida del flag en BD vía SQL directo (otro proceso Python
         # abre la misma BD sqlite). Es seguro hacerlo mientras el backend
         # está corriendo porque SQLite usa WAL mode por defecto y permite
@@ -875,11 +948,13 @@ async def amain() -> int:
         broadcast = await test_poll_extracts_code_and_broadcasts(
             runner, token, ws_handle, account_id, backend_log_path
         )
+        test_verify_email_access_info_leak_fix(runner)
         test_public_request_code(runner, token)
+        test_public_rate_limit(runner)
         test_change_password_wrong_old(runner, token)
         test_rate_limit_blocks_after_5_failures(runner)
 
-        # Tests de los 3 huecos críticos arreglados (T11-T13).
+        # Tests de los 3 huecos críticos arreglados originales.
         test_timing_oracle_equalized(runner)
         test_xff_spoof_rejected(runner)
         test_backend_blocks_stale_jwt_with_password_change(runner)

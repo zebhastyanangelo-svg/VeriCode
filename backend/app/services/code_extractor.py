@@ -46,6 +46,17 @@ PLATFORM_PATTERNS = {
 # Cualquier código de 6 dígitos rodeado de palabras clave "código"/"code"/"otp"/"pin"
 # puede ser un falso positivo si parece un año (2020-2099) o un número de orden aislado.
 YEAR_RANGE = re.compile(r"^(19|20)\d{2}$")
+# Patrones que indican que un número NO es un código de verificación.
+NON_CODE_PATTERNS = [
+    re.compile(r"(?:total|subtotal|importe|monto|amount|price|cost|tarifa)\s*[:\-$]?\s*\$?\s*\d{4,8}", re.IGNORECASE),
+    re.compile(r"order\s*(?:#|n[uo]?\.?|number)?\s*\d{4,8}", re.IGNORECASE),
+    re.compile(r"(?:factura|invoice|receipt|recibo)\s*(?:#|n[uo]?\.?)?\s*\d{4,8}", re.IGNORECASE),
+    re.compile(r"(?:zip|postal|c[óo]digo\s+postal)\s*[:\-]?\s*\d{4,8}", re.IGNORECASE),
+    re.compile(r"(?:phone|tel[eé]fono|celular|mobile|whatsapp)\s*[:\-]?\s*\+?\d{7,}", re.IGNORECASE),
+    re.compile(r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b"),  # teléfono 10 dígitos
+    re.compile(r"\b\d{5,6}\s*[-–—]\s*\d{5,6}\b"),  # rangos de números
+    re.compile(r"(?:ref(?:erencia)?|referencia|tracking|gu[ií]a|folio)\s*(?:#|n[uo]?\.?)?\s*\d{4,8}", re.IGNORECASE),
+]
 
 
 def guess_platform(sender: str, subject: str, platforms: list[Platform]) -> Optional[Platform]:
@@ -120,11 +131,29 @@ def extract_code_from_body(body: str, platform: Optional[Platform] = None) -> Op
     if not candidate:
         return None
 
-    # Validación final: descartar 4 dígitos que parezcan años.
+    # Validación final
     if len(candidate) == 4 and YEAR_RANGE.match(candidate):
         return None
 
+    # Si son solo dígitos repetidos (111111, 222222) o secuenciales
+    # (123456, 654321), es casi seguro que no es un código real.
+    if len(set(candidate)) <= 2:
+        return None
+    if _is_sequential(candidate):
+        return None
+
     return candidate
+
+
+def _is_sequential(value: str) -> bool:
+    """Detecta secuencias numéricas como 123456, 654321, 135790."""
+    if len(value) < 4:
+        return False
+    diffs = set()
+    for i in range(1, len(value)):
+        diffs.add(int(value[i]) - int(value[i - 1]))
+    # Si todos los dígitos avanzan/retroceden en el mismo paso, es secuencial.
+    return len(diffs) == 1
 
 
 def _looks_like_false_positive(value: str, text: str, start: int, end: int) -> bool:
@@ -135,16 +164,23 @@ def _looks_like_false_positive(value: str, text: str, start: int, end: int) -> b
 
     # Contexto: si el número está pegado a palabras como "order #N",
     # "factura N", "importe", es probable que no sea código.
-    context_before = text[max(0, start - 40):start].lower()
-    context_after = text[end:min(len(text), end + 40)].lower()
+    context_before = text[max(0, start - 60):start].lower()
+    context_after = text[end:min(len(text), end + 60)].lower()
 
     false_positive_keywords = [
         "order", "orden", "factura", "importe", "total", "subtotal",
         "invoice", "zip", "postal", "phone", "tel", "ruc", "cuit",
+        "reference", "ref:", "tracking", "guía", "folio",
+        "amount", "price", "cost", "tarifa", "monto", "saldo",
     ]
     if any(k in context_before for k in false_positive_keywords):
         return True
     if any(k in context_after for k in false_positive_keywords):
         return True
+
+    # Verificar contra patrones compuestos de no-código
+    for pattern in NON_CODE_PATTERNS:
+        if pattern.search(context_before + value + context_after):
+            return True
 
     return False

@@ -1,14 +1,16 @@
 import asyncio
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import client_ip
 from app.core import cache as app_cache
 from app.db.database import get_db
 from app.models import EmailAccount, Platform, VerificationCode
 from app.schemas import PlatformOut
+from app.services.rate_limit import check_public_allowed, record_public_request
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -50,42 +52,62 @@ async def list_platforms(
     return payload
 
 
-def _find_unused_code(db: Session, email_account_id: int, platform_id: int):
-    return db.query(VerificationCode).filter(
-        VerificationCode.email_account_id == email_account_id,
-        VerificationCode.platform_id == platform_id,
-        VerificationCode.is_delivered == False,
-    ).order_by(VerificationCode.received_at.desc()).first()
+async def _check_public_rate_limit(ip: str) -> None:
+    allowed, retry_after = check_public_allowed(ip)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Demasiadas solicitudes. Intentá de nuevo en {retry_after} segundos.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _lookup_account_uniform(db: Session, email: str):
+    """Busca cuenta activa. Devuelve None sin lanzar excepción."""
+    return db.query(EmailAccount).filter(
+        EmailAccount.email == email,
+        EmailAccount.is_active == True,
+    ).first()
+
+
+def _lookup_platform_uniform(db: Session, platform_name: str):
+    """Busca plataforma activa. Devuelve None sin lanzar excepción."""
+    return db.query(Platform).filter(
+        Platform.name == platform_name,
+        Platform.is_active == True,
+    ).first()
 
 
 @router.post("/request-code")
 async def request_code(
+    request: Request,
     email: str = Query(..., description="Email address"),
     platform_name: str = Query(..., description="Platform name"),
     db: Session = Depends(get_db),
+    ip: str = Depends(client_ip),
 ):
-    def _lookup_account():
-        return db.query(EmailAccount).filter(
-            EmailAccount.email == email,
-            EmailAccount.is_active == True,
-        ).first()
+    ip = ip or request.client.host if request.client else "unknown"
+    await _check_public_rate_limit(ip)
+    record_public_request(ip)
 
-    def _lookup_platform():
-        return db.query(Platform).filter(
-            Platform.name == platform_name,
-            Platform.is_active == True,
-        ).first()
+    now = datetime.utcnow()
 
-    email_account = await asyncio.to_thread(_lookup_account)
-    if not email_account:
-        raise HTTPException(status_code=404, detail="Este correo no está registrado")
+    email_account = _lookup_account_uniform(db, email)
+    platform = _lookup_platform_uniform(db, platform_name)
 
-    platform = await asyncio.to_thread(_lookup_platform)
-    if not platform:
-        raise HTTPException(status_code=404, detail="Plataforma no disponible")
+    if not email_account or not platform:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay código disponible para esta combinación de correo y plataforma",
+        )
 
     def _find_code():
-        return _find_unused_code(db, email_account.id, platform.id)
+        return db.query(VerificationCode).filter(
+            VerificationCode.email_account_id == email_account.id,
+            VerificationCode.platform_id == platform.id,
+            VerificationCode.is_delivered == False,
+            (VerificationCode.expires_at.is_(None)) | (VerificationCode.expires_at > now),
+        ).order_by(VerificationCode.received_at.desc()).first()
 
     code = await asyncio.to_thread(_find_code)
     if not code:
@@ -104,7 +126,7 @@ async def request_code(
             .values(
                 is_delivered=True,
                 delivered_to=email,
-                delivered_at=datetime.utcnow(),
+                delivered_at=now,
             )
         )
         if result.rowcount == 0:
@@ -135,35 +157,35 @@ async def request_code(
 
 @router.get("/verify-email-access")
 async def verify_email_access(
+    request: Request,
     email: str = Query(...),
     platform_name: str = Query(...),
     only_unused: bool = Query(True, description="Si true, ignora códigos ya entregados"),
     db: Session = Depends(get_db),
+    ip: str = Depends(client_ip),
 ):
-    def _lookup_account():
-        return db.query(EmailAccount).filter(
-            EmailAccount.email == email,
-            EmailAccount.is_active == True,
-        ).first()
+    ip = ip or request.client.host if request.client else "unknown"
+    await _check_public_rate_limit(ip)
+    record_public_request(ip)
 
-    def _lookup_platform():
-        return db.query(Platform).filter(
-            Platform.name == platform_name,
-            Platform.is_active == True,
-        ).first()
+    now = datetime.utcnow()
 
-    email_account = await asyncio.to_thread(_lookup_account)
-    if not email_account:
-        raise HTTPException(status_code=404, detail="Correo no registrado")
+    email_account = _lookup_account_uniform(db, email)
+    platform = _lookup_platform_uniform(db, platform_name)
 
-    platform = await asyncio.to_thread(_lookup_platform)
-    if not platform:
-        raise HTTPException(status_code=404, detail="Plataforma no disponible")
+    # Respuesta uniforme: no revelar si el correo está registrado o no.
+    if not email_account or not platform:
+        return {
+            "has_access": False,
+            "detail": "No hay código disponible para esta combinación",
+        }
 
     def _query():
         q = db.query(VerificationCode).filter(
             VerificationCode.email_account_id == email_account.id,
             VerificationCode.platform_id == platform.id,
+        ).filter(
+            (VerificationCode.expires_at.is_(None)) | (VerificationCode.expires_at > now),
         )
         if only_unused:
             q = q.filter(VerificationCode.is_delivered == False)
@@ -172,19 +194,29 @@ async def verify_email_access(
     code = await asyncio.to_thread(_query)
 
     if not code:
-        raise HTTPException(status_code=404, detail="No hay código disponible")
+        return {
+            "has_access": False,
+            "detail": "No hay código disponible para esta combinación",
+        }
 
     return {
         "has_access": True,
-        "email": email,
+        "detail": "Código disponible",
         "platform_name": platform.name,
         "platform_display_name": platform.display_name,
-        "code": code.code,
-        "platform_id": platform.id,
         "code_id": code.id,
         "is_read": code.is_read,
         "is_delivered": code.is_delivered,
         "received_at": code.received_at.isoformat() if code.received_at else None,
-        "sender": _sanitize_email_address(code.sender),
-        "subject": code.subject,
     }
+
+
+@router.post("/_test/reset-rate-limit")
+def test_reset_public_rate_limit():
+    from app.config import settings as s
+    if s.vericode_env == "production":
+        from fastapi import HTTPException as HE
+        raise HE(status_code=404, detail="Not Found")
+    from app.services.rate_limit import reset_public_limiter
+    reset_public_limiter()
+    return {"message": "Public rate-limit reseteado"}

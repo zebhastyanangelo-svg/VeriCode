@@ -95,6 +95,17 @@ class Settings(BaseSettings):
     auth_rate_limit_max_attempts: int = 5
     # Ventana del rate-limit, en minutos.
     auth_rate_limit_window_minutes: int = 15
+    # Rate-limit para endpoints públicos (request-code, verify-email-access).
+    public_rate_limit_max_attempts: int = 10
+    public_rate_limit_window_minutes: int = 1
+    # Tiempo de expiración de códigos no reclamados (en minutos).
+    code_expiration_minutes: int = 30
+    # Días que se conservan los códigos antes de purga automática.
+    code_retention_days: int = 7
+    # Minutos tras los cuales se anonymiza raw_body.
+    raw_body_retention_minutes: int = 60
+    # Intervalo entre limpiezas automáticas (en minutos).
+    cleanup_interval_minutes: int = 60
     # ---------------------------------------------------------------
     # Reverse proxy / IP de cliente
     # ---------------------------------------------------------------

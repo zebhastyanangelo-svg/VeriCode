@@ -212,12 +212,11 @@ async def lifespan(app: FastAPI):
     # Banner se imprime al final, sólo si todo lo anterior pasó: es la
     # confirmación visible para el operador de que arrancó en modo X.
     _print_startup_banner()
-    # Registrar el handler para que el poller pueda emitir WS.
+    # Registrar el handler y arrancar IDLE watchers.
     poller.on_new_code(broadcast_new_code_handler)
-    task = asyncio.create_task(start_poller())
+    await poller.start()
     yield
     poller.stop()
-    task.cancel()
 
 
 app = FastAPI(
@@ -315,10 +314,6 @@ def seed_admin():
 # --------------------------------------------------------------------------
 # Poller -> WebSocket bridge
 # --------------------------------------------------------------------------
-async def start_poller():
-    await poller.start(interval=settings.poll_interval_seconds)
-
-
 def broadcast_new_code_handler(code, db):
     """Handler registrado en el singleton poller. Devuelve una coroutine
     que `notify_new_code` va a `await`."""

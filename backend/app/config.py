@@ -65,6 +65,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     poll_interval_seconds: int = 30
+    # Tiempo máximo en segundos para cada ciclo IDLE (RFC 2177: max 29 min).
+    # Por defecto 28 min (1680 s). El servidor notifica al cliente en tiempo
+    # real cuando llega un correo, eliminando la necesidad de sondeo periódico.
+    imap_idle_timeout: int = 1680
     # Clave Fernet válida de 32 bytes (base64 url-safe). Se usa para cifrar
     # las contraseñas IMAP en BD. Generar con:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -72,7 +76,7 @@ class Settings(BaseSettings):
     # producción se deja sin configurar.
     fernet_key: str = DEV_FERNET_MARKER
     # Orígenes permitidos para CORS (separados por coma).
-    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
+    cors_origins: str = "https://vericode.dpdns.org,http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
     # ---------------------------------------------------------------
     # Seguridad
     # ---------------------------------------------------------------

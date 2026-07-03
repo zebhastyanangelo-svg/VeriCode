@@ -224,13 +224,14 @@ Prefijo: `/api/v1`
 ### 7.1 IMAPPoller (`app/services/imap_poller.py`)
 
 - Singleton creado en `main.py`.
-- Arranca en `lifespan` con `interval=30 s`.
-- Loop: `await poller.start(interval=30)`.
-- Captura `self._main_loop = asyncio.get_running_loop()` al inicio para notificaciones thread-safe.
-- `process_account`: connect → fetch UNSEEN → extract → save → callback.
+- Arranca en `lifespan` con `await poller.start()`.
+- Crea una tarea asyncio por cuenta activa usando IMAP IDLE (RFC 2177).
+- Cada tarea mantiene una conexión persistente con `aioimaplib` y recibe notificaciones push del servidor cuando llega un nuevo correo, eliminando el sondeo periódico.
+- `process_account`: one-shot connect → fetch UNSEEN → extract → save → callback (usado por el endpoint manual `/poll`).
 - `connect_account`: usa IMAP4_SSL con host según `email_type` (autofill Gmail/Outlook/Yahoo).
 - `fetch_unread`: marca `\\Seen` después de procesar para no duplicar.
 - `notify_new_code`: lanza `asyncio.run_coroutine_threadsafe` para que `broadcast_new_code` corra en el loop principal y use el WS.
+- Cuando se crea/edita/elimina una cuenta, el router llama a `poller.reload_accounts()` para reiniciar los watchers.
 
 ### 7.2 code_extractor (`app/services/code_extractor.py`)
 

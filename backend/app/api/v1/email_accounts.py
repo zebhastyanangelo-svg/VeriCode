@@ -75,7 +75,9 @@ async def create_account(
         db.refresh(account)
         app_cache.bump_version(app_cache.NS_EMAIL_ACCOUNTS)
         return account
-    return await asyncio.to_thread(_refresh)
+    result = await asyncio.to_thread(_refresh)
+    await poller.reload_accounts()
+    return result
 
 
 @router.get("/{account_id}", response_model=EmailAccountOut)
@@ -120,7 +122,9 @@ async def update_account(
         db.refresh(account)
         app_cache.bump_version(app_cache.NS_EMAIL_ACCOUNTS)
         return account
-    return await asyncio.to_thread(_refresh)
+    result = await asyncio.to_thread(_refresh)
+    await poller.reload_accounts()
+    return result
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -138,6 +142,7 @@ async def delete_account(
         app_cache.bump_version(app_cache.NS_EMAIL_ACCOUNTS)
 
     await asyncio.to_thread(_query)
+    await poller.reload_accounts()
 
 
 @router.post("/{account_id}/test")

@@ -355,13 +355,13 @@ Lógica de detección (orden de prioridad):
 async def lifespan(app):
     Base.metadata.create_all(bind=engine)
     seed_platforms()              # idempotente
-    task = asyncio.create_task(start_poller())
+    poller.on_new_code(broadcast_new_code_handler)
+    await poller.start()
     yield
     poller.stop()
-    task.cancel()
 ```
 
-`start_poller()` también registra el callback `on_new_code` que llama a `broadcast_new_code` (de `app/api/v1/codes.py`) para que el WebSocket emita a clientes conectados.
+`poller.start()` crea una tarea asyncio por cada cuenta activa que mantiene una conexión IMAP IDLE persistente usando `aioimaplib`. Cuando el servidor notifica un nuevo correo (push), el watcher extrae el código, lo guarda en BD y lo emite vía WebSocket. Esto elimina la necesidad de sondear cada N segundos.
 
 ---
 

@@ -73,9 +73,14 @@ def guess_platform(sender: str, subject: str, platforms: list[Platform]) -> Opti
             return platform
 
     # 2. Diccionario hardcodeado -> buscar match por nombre en BD
+    # Usar word boundaries para evitar falsos positivos (ej. "vericode"
+    # contiene "code" como substring pero no es un código de verificación).
     for key, patterns in PLATFORM_PATTERNS.items():
         sender_match = any(s in sender_lower for s in patterns["senders"])
-        subject_match = any(s in subject_lower for s in patterns["subjects"])
+        subject_match = any(
+            re.search(rf"\b{re.escape(s)}\b", subject_lower, re.IGNORECASE)
+            for s in patterns["subjects"]
+        )
         if sender_match or subject_match:
             for platform in platforms:
                 if platform.name == key:

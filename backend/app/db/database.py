@@ -20,7 +20,7 @@ def _create_engine():
             pool_pre_ping=True,
             pool_recycle=600,
             pool_timeout=45,
-            connect_args={"connect_timeout": 15, "sslmode": "require"},
+            connect_args={"connect_timeout": 25, "sslmode": "require"},
         )
     return create_engine(url, pool_pre_ping=True)
 

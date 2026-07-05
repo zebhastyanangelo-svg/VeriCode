@@ -9,6 +9,7 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     email: '',
     password: '',
@@ -53,6 +54,8 @@ export default function AccountsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const submitData = { ...form };
       if (submitData.platform_id === '') delete submitData.platform_id;
@@ -68,7 +71,9 @@ export default function AccountsPage() {
       resetForm();
       fetchAccounts();
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Error al guardar la cuenta');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -211,8 +216,8 @@ export default function AccountsPage() {
 
               <div className="form-actions">
                 <button type="button" className="btn btn-outline" onClick={resetForm}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">
-                  {editing ? 'Guardar Cambios' : 'Crear Cuenta'}
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Guardando...' : editing ? 'Guardar Cambios' : 'Crear Cuenta'}
                 </button>
               </div>
             </form>

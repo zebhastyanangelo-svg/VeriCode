@@ -32,6 +32,7 @@ try:
             Platform(name="claude", display_name="Claude AI", provider_type="ai", icon="anthropic"),
             Platform(name="midjourney", display_name="Midjourney", provider_type="ai", icon="midjourney"),
             Platform(name="paramount", display_name="Paramount+", provider_type="streaming", icon="paramount"),
+            Platform(name="google", display_name="Google", provider_type="google", icon="google"),
         ]
         for p in platforms:
             db.add(p)

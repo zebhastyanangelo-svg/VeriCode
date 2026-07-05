@@ -315,6 +315,7 @@ def seed_platforms():
             Platform(name="midjourney", display_name="Midjourney", provider_type="ai", icon="midjourney", code_pattern=r"\b(\d{6})\b", sender_pattern=r"@(midjourney\.com)", subject_pattern=r"(c[oó]digo|verificaci[oó]n|verification)"),
             Platform(name="paramount", display_name="Paramount+", provider_type="streaming", icon="paramount", code_pattern=r"\b(\d{6})\b", sender_pattern=r"@(paramountplus\.com|paramount\.com)", subject_pattern=r"(c[oó]digo|verificaci[oó]n|verification)"),
             Platform(name="crunchyroll", display_name="Crunchyroll", provider_type="streaming", icon="crunchyroll", code_pattern=r"\b(\d{6})\b", sender_pattern=r"@(crunchyroll\.com)", subject_pattern=r"(c[oó]digo|verificaci[oó]n|verification)"),
+            Platform(name="google", display_name="Google", provider_type="google", icon="google", code_pattern=r"\b(\d{6})\b", sender_pattern=r"@(google\.com|accounts\.google\.com)", subject_pattern=r"(c[oó]digo|verificaci[oó]n|verification|otp)"),
         ]
         for p in default_platforms:
             db.add(p)

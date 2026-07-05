@@ -8,6 +8,7 @@ export default function PlatformsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: '',
     display_name: '',
@@ -42,6 +43,8 @@ export default function PlatformsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
       if (editing) {
         const updateData = { ...form };
@@ -57,7 +60,9 @@ export default function PlatformsPage() {
       resetForm();
       fetchPlatforms();
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Error al guardar la plataforma');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -134,6 +139,7 @@ export default function PlatformsPage() {
                   <select value={form.provider_type} onChange={e => setForm({ ...form, provider_type: e.target.value })}>
                     <option value="streaming">Streaming</option>
                     <option value="ai">IA</option>
+                    <option value="google">Google</option>
                     <option value="other">Otro</option>
                   </select>
                 </div>
@@ -180,8 +186,8 @@ export default function PlatformsPage() {
 
               <div className="form-actions">
                 <button type="button" className="btn btn-outline" onClick={resetForm}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">
-                  {editing ? 'Guardar Cambios' : 'Crear Plataforma'}
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Guardando...' : editing ? 'Guardar Cambios' : 'Crear Plataforma'}
                 </button>
               </div>
             </form>
@@ -210,7 +216,7 @@ export default function PlatformsPage() {
                 </td>
                 <td>
                   <span className={`badge badge-${p.provider_type}`}>
-                    {p.provider_type === 'streaming' ? '📺 Streaming' : p.provider_type === 'ai' ? '🤖 IA' : '📦 Otro'}
+                    {p.provider_type === 'streaming' ? '📺 Streaming' : p.provider_type === 'ai' ? '🤖 IA' : p.provider_type === 'google' ? '🔵 Google' : '📦 Otro'}
                   </span>
                 </td>
                 <td><code className="code-inline">{p.code_pattern || '-'}</code></td>

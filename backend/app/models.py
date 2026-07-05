@@ -20,6 +20,7 @@ class EmailType(str, enum.Enum):
 class ProviderType(str, enum.Enum):
     streaming = "streaming"
     ai = "ai"
+    google = "google"
     other = "other"
 
 

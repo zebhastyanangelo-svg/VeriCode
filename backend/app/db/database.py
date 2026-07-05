@@ -9,8 +9,8 @@ def _create_engine():
     if url.startswith("postgresql"):
         return create_engine(
             url,
-            pool_size=1,
-            max_overflow=0,
+            pool_size=2,
+            max_overflow=1,
             pool_pre_ping=True,
             pool_recycle=300,
             connect_args={"connect_timeout": 30, "sslmode": "require"},

@@ -226,10 +226,13 @@ def get_or_compute(
 
     try:
         value = compute_fn()
-    finally:
+    except Exception:
         with _lock:
             _pending[namespace] = False
-            _cache[key] = (now + ttl_seconds, value)
+        raise
+    with _lock:
+        _pending[namespace] = False
+        _cache[key] = (now + ttl_seconds, value)
 
     return value
 

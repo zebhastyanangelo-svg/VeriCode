@@ -13,7 +13,7 @@ def _create_engine():
             max_overflow=0,
             pool_pre_ping=True,
             pool_recycle=300,
-            connect_args={"connect_timeout": 10},
+            connect_args={"connect_timeout": 30},
         )
     return create_engine(url, pool_pre_ping=True)
 

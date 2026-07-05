@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { api, setToken, clearToken, getToken } from '../api';
+import { api, setToken, clearToken, getToken, isTokenExpired } from '../api';
 
 const AuthContext = createContext(null);
 
@@ -11,12 +11,14 @@ export function AuthProvider({ children }) {
   // /me ahora devuelve must_change_password de BD; sin ese dato no podemos
   // decidir si el usuario puede entrar al panel.
   useEffect(() => {
-    if (getToken()) {
+    const t = getToken();
+    if (t && !isTokenExpired(t)) {
       api.getMe()
         .then(setUser)
         .catch(() => clearToken())
         .finally(() => setLoading(false));
     } else {
+      if (t) clearToken();
       setLoading(false);
     }
   }, []);

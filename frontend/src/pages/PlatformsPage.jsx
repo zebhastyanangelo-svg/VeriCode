@@ -25,7 +25,7 @@ export default function PlatformsPage() {
       const data = await api.getPlatforms();
       setPlatforms(data);
     } catch (err) {
-      toast.error('Error al cargar plataformas');
+      if (!err._auth) toast.error('Error al cargar plataformas');
     } finally {
       setLoading(false);
     }
@@ -60,7 +60,7 @@ export default function PlatformsPage() {
       resetForm();
       fetchPlatforms();
     } catch (err) {
-      toast.error(err.message || 'Error al guardar la plataforma');
+      if (!err._auth) toast.error(err.message || 'Error al guardar la plataforma');
     } finally {
       setSubmitting(false);
     }
@@ -87,7 +87,7 @@ export default function PlatformsPage() {
       toast.success('Plataforma eliminada');
       fetchPlatforms();
     } catch (err) {
-      toast.error(err.message);
+      if (!err._auth) toast.error(err.message);
     }
   };
 
@@ -96,9 +96,9 @@ export default function PlatformsPage() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1><i className="fas fa-tv"></i> Plataformas</h1>
+        <h1><i className="fas fa-tv" aria-hidden="true"></i> Plataformas</h1>
         <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>
-          <i className="fas fa-plus"></i> Agregar Plataforma
+          <i className="fas fa-plus" aria-hidden="true"></i> Agregar Plataforma
         </button>
       </div>
 
@@ -226,11 +226,11 @@ export default function PlatformsPage() {
                   {p.is_active ? 'Activo' : 'Inactivo'}
                 </td>
                 <td className="actions-cell">
-                  <button className="btn btn-sm" onClick={() => handleEdit(p)} title="Editar">
-                    <i className="fas fa-edit"></i>
+                  <button className="btn btn-sm" onClick={() => handleEdit(p)} aria-label="Editar" title="Editar">
+                    <i className="fas fa-edit" aria-hidden="true"></i>
                   </button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)} title="Eliminar">
-                    <i className="fas fa-trash"></i>
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)} aria-label="Eliminar" title="Eliminar">
+                    <i className="fas fa-trash" aria-hidden="true"></i>
                   </button>
                 </td>
               </tr>

@@ -26,7 +26,7 @@ export default function AccountsPage() {
       const data = await api.getEmailAccounts();
       setAccounts(data);
     } catch (err) {
-      toast.error('Error al cargar cuentas');
+      if (!err._auth) toast.error('Error al cargar cuentas');
     } finally {
       setLoading(false);
     }
@@ -37,7 +37,7 @@ export default function AccountsPage() {
       const data = await api.getPlatforms();
       setPlatforms(data.filter(p => p.is_active));
     } catch (err) {
-      toast.error('Error al cargar plataformas');
+      if (!err._auth) toast.error('Error al cargar plataformas');
     }
   };
 
@@ -125,7 +125,7 @@ export default function AccountsPage() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1><i className="fas fa-envelope"></i> Cuentas de Correo</h1>
+        <h1><i className="fas fa-envelope" aria-hidden="true"></i> Cuentas de Correo</h1>
         <button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>
           <i className="fas fa-plus"></i> Agregar Cuenta
         </button>
@@ -141,18 +141,20 @@ export default function AccountsPage() {
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="form-row">
                 <div className="form-group flex-1">
-                  <label>Correo electrónico</label>
+                  <label htmlFor="account-email">Correo electrónico</label>
                   <input
+                    id="account-email"
                     type="email"
                     value={form.email}
                     onChange={e => setForm({ ...form, email: e.target.value })}
                     required
                     placeholder="cuenta@correo.com"
+                    autoComplete="email"
                   />
                 </div>
                 <div className="form-group">
-                  <label>Tipo</label>
-                  <select value={form.email_type} onChange={e => setForm({ ...form, email_type: e.target.value })}>
+                  <label htmlFor="account-type">Tipo</label>
+                  <select id="account-type" value={form.email_type} onChange={e => setForm({ ...form, email_type: e.target.value })}>
                     <option value="gmail">Gmail</option>
                     <option value="outlook">Outlook</option>
                     <option value="yahoo">Yahoo</option>
@@ -162,8 +164,8 @@ export default function AccountsPage() {
               </div>
 
               <div className="form-group">
-                <label>Plataforma (opcional)</label>
-                <select value={form.platform_id} onChange={e => setForm({ ...form, platform_id: e.target.value })}>
+                <label htmlFor="account-platform">Plataforma (opcional)</label>
+                <select id="account-platform" value={form.platform_id} onChange={e => setForm({ ...form, platform_id: e.target.value })}>
                   <option value="">Sin plataforma asignada (auto-detectar)</option>
                   {platforms.map(p => (
                     <option key={p.id} value={p.id}>
@@ -174,29 +176,34 @@ export default function AccountsPage() {
               </div>
 
               <div className="form-group">
-                <label>Contraseña</label>
+                <label htmlFor="account-password">Contraseña</label>
                 <input
+                  id="account-password"
                   type="password"
                   value={form.password}
                   onChange={e => setForm({ ...form, password: e.target.value })}
                   required={!editing}
                   placeholder={editing ? 'Dejar vacío para no cambiar' : 'Contraseña del correo'}
+                  autoComplete="new-password"
                 />
               </div>
 
               <div className="form-row">
                 <div className="form-group flex-1">
-                  <label>Servidor IMAP (opcional)</label>
+                  <label htmlFor="account-imap-host">Servidor IMAP (opcional)</label>
                   <input
+                    id="account-imap-host"
                     type="text"
                     value={form.imap_host}
                     onChange={e => setForm({ ...form, imap_host: e.target.value })}
                     placeholder={form.email_type === 'gmail' ? 'imap.gmail.com' : form.email_type === 'outlook' ? 'outlook.office365.com' : 'imap.example.com'}
+                    autoComplete="off"
                   />
                 </div>
                 <div className="form-group" style={{ width: '100px' }}>
-                  <label>Puerto</label>
+                  <label htmlFor="account-imap-port">Puerto</label>
                   <input
+                    id="account-imap-port"
                     type="number"
                     value={form.imap_port}
                     onChange={e => setForm({ ...form, imap_port: parseInt(e.target.value) || 993 })}
@@ -205,7 +212,7 @@ export default function AccountsPage() {
               </div>
 
               <div className="form-group">
-                <label>Notas</label>
+                <label htmlFor="account-notes">Notas</label>
                 <textarea
                   value={form.notes}
                   onChange={e => setForm({ ...form, notes: e.target.value })}
@@ -251,17 +258,17 @@ export default function AccountsPage() {
                 <td>{a.last_checked ? new Date(a.last_checked).toLocaleString() : 'Nunca'}</td>
                 <td className="text-muted">{a.notes || '-'}</td>
                 <td className="actions-cell">
-                  <button className="btn btn-sm" onClick={() => handleTest(a.id)} title="Probar conexión">
-                    <i className="fas fa-plug"></i>
+                  <button className="btn btn-sm" onClick={() => handleTest(a.id)} aria-label="Probar conexión" title="Probar conexión">
+                    <i className="fas fa-plug" aria-hidden="true"></i>
                   </button>
-                  <button className="btn btn-sm" onClick={() => handlePoll(a.id)} title="Verificar ahora">
-                    <i className="fas fa-sync-alt"></i>
+                  <button className="btn btn-sm" onClick={() => handlePoll(a.id)} aria-label="Verificar ahora" title="Verificar ahora">
+                    <i className="fas fa-sync-alt" aria-hidden="true"></i>
                   </button>
-                  <button className="btn btn-sm" onClick={() => handleEdit(a)} title="Editar">
-                    <i className="fas fa-edit"></i>
+                  <button className="btn btn-sm" onClick={() => handleEdit(a)} aria-label="Editar" title="Editar">
+                    <i className="fas fa-edit" aria-hidden="true"></i>
                   </button>
-                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} title="Eliminar">
-                    <i className="fas fa-trash"></i>
+                  <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)} aria-label="Eliminar" title="Eliminar">
+                    <i className="fas fa-trash" aria-hidden="true"></i>
                   </button>
                 </td>
               </tr>

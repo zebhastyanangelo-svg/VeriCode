@@ -27,7 +27,7 @@ export default function Dashboard() {
       setStats(statsData);
     } catch (err) {
       if (seq !== requestSeqRef.current) return;
-      toast.error('Error al cargar datos');
+      if (!err._auth) toast.error('Error al cargar datos');
     } finally {
       if (seq === requestSeqRef.current) {
         setLoading(false);
@@ -144,10 +144,10 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1><i className="fas fa-home"></i> Dashboard</h1>
+        <h1><i className="fas fa-home" aria-hidden="true"></i> Dashboard</h1>
         <div className="header-actions">
           <button className="btn btn-sm" onClick={() => { setLoading(true); fetchData(filter); }}>
-            <i className="fas fa-sync-alt"></i> Actualizar
+            <i className="fas fa-sync-alt" aria-hidden="true"></i> Actualizar
           </button>
         </div>
       </div>
@@ -174,7 +174,7 @@ export default function Dashboard() {
       )}
 
       <div className="search-bar">
-        <i className="fas fa-search"></i>
+        <i className="fas fa-search" aria-hidden="true"></i>
         <input
           type="text"
           placeholder="Buscar por código, correo, plataforma..."
@@ -183,7 +183,7 @@ export default function Dashboard() {
         />
         {filter && (
           <button className="btn-clear" onClick={() => setFilter('')}>
-            <i className="fas fa-times"></i>
+            <i className="fas fa-times" aria-hidden="true"></i>
           </button>
         )}
       </div>
@@ -191,7 +191,7 @@ export default function Dashboard() {
       <div className="codes-grid">
         {codes.length === 0 ? (
           <div className="empty-state">
-            <i className="fas fa-inbox"></i>
+            <i className="fas fa-inbox" aria-hidden="true"></i>
             <p>{filter ? 'Sin resultados para tu búsqueda' : 'No hay códigos de verificación'}</p>
           </div>
         ) : (

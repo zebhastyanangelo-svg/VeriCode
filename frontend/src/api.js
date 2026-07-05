@@ -16,6 +16,16 @@ export function getToken() {
   return token;
 }
 
+export function isTokenExpired(t) {
+  if (!t) return true;
+  try {
+    const payload = JSON.parse(atob(t.split('.')[1]));
+    return Date.now() >= payload.exp * 1000;
+  } catch {
+    return true;
+  }
+}
+
 async function apiFetch(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const headers = { ...options.headers };
@@ -36,7 +46,9 @@ async function apiFetch(endpoint, options = {}) {
   if (res.status === 401) {
     clearToken();
     window.location.hash = '/login';
-    throw new Error('Sesión expirada');
+    const err = new Error('Sesión expirada');
+    err._auth = true;
+    throw err;
   }
 
   if (res.status === 204) return null;

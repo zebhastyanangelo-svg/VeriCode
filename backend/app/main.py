@@ -18,7 +18,7 @@ from app.config import (
     settings,
 )
 from app.core import cache as app_cache
-from app.db.database import Base, engine, SessionLocal
+from app.db.database import Base, db_keepalive, engine, SessionLocal
 from app.models import Platform, User, VerificationCode
 from app.services.imap_poller import poller_instance as poller
 
@@ -260,12 +260,14 @@ async def lifespan(app: FastAPI):
     # Registrar el handler y arrancar IDLE watchers.
     poller.on_new_code(broadcast_new_code_handler)
     await poller.start()
-    # Arrancar tarea de limpieza en segundo plano
+    # Arrancar tareas en segundo plano
     cleanup = asyncio.create_task(_cleanup_task())
+    keepalive = asyncio.create_task(db_keepalive())
     yield
     poller.stop()
+    keepalive.cancel()
     cleanup.cancel()
-
+    await asyncio.sleep(0)  # Permitir a las tareas limpiar
 
 app = FastAPI(
     title="Sistema de Códigos de Verificación",

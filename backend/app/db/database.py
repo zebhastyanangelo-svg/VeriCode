@@ -38,16 +38,29 @@ def get_db():
         db.close()
 
 
+def _warm_db_pool():
+    """Crea una conexión y la devuelve al pool, dejándola lista para
+    requests posteriores. El timeout largo (connect_timeout=25) es
+    necesario porque Supabase pooler (us-east-2) tarda ~19s desde
+    Render Oregon (us-west-2), y Render LB solo da ~15s."""
+    t0 = time.monotonic()
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    elapsed = time.monotonic() - t0
+    logger.info("DB warm-up complete (%.2fs)", elapsed)
+
+
 async def db_keepalive():
-    """Mantiene al menos una conexión activa en el pool para evitar
-    la latencia de ~19s al conectar desde Render Oregon a Supabase us-east-2."""
+    """Mantiene al menos una conexión activa en el pool."""
+    loop = asyncio.get_running_loop()
     while True:
         try:
-            t0 = time.monotonic()
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            elapsed = time.monotonic() - t0
-            logger.debug("DB keepalive OK (%.2fs)", elapsed)
+            await loop.run_in_executor(None, _do_ping)
         except Exception as exc:
             logger.warning("DB keepalive error: %s", exc)
         await asyncio.sleep(25)
+
+
+def _do_ping():
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))

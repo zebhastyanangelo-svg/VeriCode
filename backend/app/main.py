@@ -18,7 +18,7 @@ from app.config import (
     settings,
 )
 from app.core import cache as app_cache
-from app.db.database import Base, db_keepalive, engine, SessionLocal
+from app.db.database import Base, db_keepalive, engine, SessionLocal, _warm_db_pool
 from app.models import Platform, User, VerificationCode
 from app.services.imap_poller import poller_instance as poller
 
@@ -257,6 +257,9 @@ async def lifespan(app: FastAPI):
     # Banner se imprime al final, sólo si todo lo anterior pasó: es la
     # confirmación visible para el operador de que arrancó en modo X.
     _print_startup_banner()
+    # Calentar pool de DB antes de aceptar requests. Bloquea hasta que
+    # la conexión esté lista (19s aprox), pero evita 502 de Render LB.
+    _warm_db_pool()
     # Registrar el handler y arrancar IDLE watchers.
     poller.on_new_code(broadcast_new_code_handler)
     await poller.start()

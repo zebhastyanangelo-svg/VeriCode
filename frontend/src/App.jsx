@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { api } from './api';
+import { track } from './utils/analytics';
 import Navbar from './components/Navbar';
 import Loading from './components/Loading';
 import LandingPage from './pages/LandingPage';
@@ -29,7 +30,11 @@ function AppContent() {
   const [hash, setHash] = useState(window.location.hash.slice(1) || '/');
 
   useEffect(() => {
-    const onHashChange = () => setHash(window.location.hash.slice(1) || '/');
+    const onHashChange = () => {
+      const h = window.location.hash.slice(1) || '/';
+      setHash(h);
+      track('page_viewed', { page: h });
+    };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { api, setToken, clearToken, getToken, isTokenExpired } from '../api';
+import { identify, peopleSet, reset, register } from '../utils/analytics';
 
 const AuthContext = createContext(null);
 
@@ -26,10 +27,11 @@ export function AuthProvider({ children }) {
   const login = async (username, password) => {
     const data = await api.login(username, password);
     setToken(data.access_token);
-    // Refetch /me para tener must_change_password autoritativo de BD
-    // (no confíar en el flag del /token, está OK pero /me lo confirma).
     const me = await api.getMe();
     setUser(me);
+    identify(me.id);
+    peopleSet({ $name: me.username, $email: me.email });
+    register({ platform: 'web' });
     return me;
   };
 
@@ -42,6 +44,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     clearToken();
     setUser(null);
+    reset();
   };
 
   return (

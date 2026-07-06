@@ -3,6 +3,7 @@ import { api, getToken } from '../api';
 import { useToast } from '../context/ToastContext';
 import CodeCard from '../components/CodeCard';
 import Loading from '../components/Loading';
+import { track } from '../utils/analytics';
 
 export default function Dashboard() {
   const [codes, setCodes] = useState([]);
@@ -80,7 +81,11 @@ export default function Dashboard() {
               if (prev.some(c => c.id === msg.data.id)) return prev;
               return [msg.data, ...prev].slice(0, 200);
             });
-            // Refresh stats silently
+            track('code_received', {
+              platform_name: msg.data.platform_name || '',
+              email_account: msg.data.email || '',
+              is_delivered: msg.data.is_delivered || false,
+            });
             api.getCodeStats().then(setStats).catch(() => {});
           }
         } catch (e) { /* ignore */ }

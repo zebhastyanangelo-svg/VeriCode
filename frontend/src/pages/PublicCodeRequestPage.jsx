@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import { getPlatformIconUrl, getPlatformFallbackIcon } from '../utils/platformIcons';
+import { track } from '../utils/analytics';
 
 export default function PublicCodeRequestPage() {
   const [email, setEmail] = useState('');
@@ -45,8 +46,18 @@ export default function PublicCodeRequestPage() {
           is_read: response.is_read,
           is_delivered: true,
         });
+        track('code_requested', {
+          platform_name: response.platform_name || response.platform_display_name || '',
+          email_account: email,
+          success: true,
+        });
         toast.success('Código entregado');
       } else {
+        track('code_requested', {
+          platform_name: platform || '',
+          email_account: email,
+          success: false,
+        });
         toast.error('No se encontró código para esta cuenta y plataforma');
       }
     } catch (err) {

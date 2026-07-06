@@ -37,6 +37,7 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.tu-dominio.com/api/v1' }}
+          VITE_MIXPANEL_TOKEN: ${{ vars.VITE_MIXPANEL_TOKEN || '0a6068b376632aba002d010e84fd9f26' }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

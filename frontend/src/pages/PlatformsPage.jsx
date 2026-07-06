@@ -3,6 +3,97 @@ import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import Loading from '../components/Loading';
 
+const COMMON_PLATFORMS = {
+  netflix: {
+    display_name: 'Netflix',
+    provider_type: 'streaming',
+    icon: 'netflix',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(netflix\\.com|account\\.netflix\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  disney_plus: {
+    display_name: 'Disney+',
+    provider_type: 'streaming',
+    icon: 'disney',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(disneyplus\\.com|disney\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  hbo_max: {
+    display_name: 'HBO Max',
+    provider_type: 'streaming',
+    icon: 'hbo',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(hbomax\\.com|hbo\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  prime_video: {
+    display_name: 'Prime Video',
+    provider_type: 'streaming',
+    icon: 'prime',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(primevideo\\.com|amazon\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|otp|verification)',
+  },
+  spotify: {
+    display_name: 'Spotify',
+    provider_type: 'streaming',
+    icon: 'spotify',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(spotify\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  paramount: {
+    display_name: 'Paramount+',
+    provider_type: 'streaming',
+    icon: 'paramount',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(paramountplus\\.com|paramount\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  crunchyroll: {
+    display_name: 'Crunchyroll',
+    provider_type: 'streaming',
+    icon: 'crunchyroll',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(crunchyroll\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  chatgpt: {
+    display_name: 'ChatGPT',
+    provider_type: 'ai',
+    icon: 'openai',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(openai\\.com|chatgpt\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification|login)',
+  },
+  claude: {
+    display_name: 'Claude AI',
+    provider_type: 'ai',
+    icon: 'anthropic',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(anthropic\\.com|claude\\.ai)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  midjourney: {
+    display_name: 'Midjourney',
+    provider_type: 'ai',
+    icon: 'midjourney',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(midjourney\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification)',
+  },
+  google: {
+    display_name: 'Google',
+    provider_type: 'google',
+    icon: 'google',
+    code_pattern: '\\b(\\d{6})\\b',
+    sender_pattern: '@(google\\.com|accounts\\.google\\.com)',
+    subject_pattern: '(c[oó]digo|verificaci[oó]n|verification|otp)',
+  },
+};
+
 export default function PlatformsPage() {
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +125,24 @@ export default function PlatformsPage() {
   useEffect(() => {
     fetchPlatforms();
   }, []);
+
+  const handleNameChange = (name) => {
+    const common = COMMON_PLATFORMS[name.toLowerCase().trim()];
+    if (common && !editing) {
+      setForm((prev) => ({
+        ...prev,
+        name,
+        display_name: common.display_name,
+        provider_type: common.provider_type,
+        icon: common.icon,
+        code_pattern: common.code_pattern,
+        sender_pattern: common.sender_pattern,
+        subject_pattern: common.subject_pattern,
+      }));
+    } else {
+      setForm((prev) => ({ ...prev, name }));
+    }
+  };
 
   const resetForm = () => {
     setForm({ name: '', display_name: '', provider_type: 'streaming', code_pattern: '', sender_pattern: '', subject_pattern: '', icon: '' });
@@ -116,11 +225,17 @@ export default function PlatformsPage() {
                   <input
                     type="text"
                     value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    onChange={e => handleNameChange(e.target.value)}
                     required
                     placeholder="netflix"
                     disabled={!!editing}
+                    list="common-platforms"
                   />
+                  <datalist id="common-platforms">
+                    {Object.keys(COMMON_PLATFORMS).map((key) => (
+                      <option key={key} value={key} />
+                    ))}
+                  </datalist>
                 </div>
                 <div className="form-group flex-1">
                   <label>Nombre mostrado</label>

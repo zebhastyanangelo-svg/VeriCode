@@ -17,3 +17,4 @@ websockets>=16.0
 # directo. Ver docs/07-DEPLOY.md para los detalles.
 psycopg2-binary>=2.9.9
 aioimaplib>=2.0.0
+sentry-sdk>=2.0.0

@@ -1,9 +1,19 @@
 import asyncio
 import os
+import urllib.request
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
+import sentry_sdk
 from fastapi import FastAPI
+
+
+sentry_sdk.init(
+    dsn="https://6ff3be3e6f56bed68cc2cbc56c93ba7f@o4511689712992256.ingest.us.sentry.io/4511689725247488",
+    send_default_pii=True,
+    enable_logs=True,
+    traces_sample_rate=1.0,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import inspect, text
@@ -226,6 +236,19 @@ async def _cleanup_task():
             break
 
 
+HEARTBEAT_URL = "https://uptime.betterstack.com/api/v1/heartbeat/Xv7CEfiQGtsSveCvqWuASEQy"
+
+async def _heartbeat_task():
+    while True:
+        try:
+            await asyncio.to_thread(
+                lambda: urllib.request.urlopen(HEARTBEAT_URL, timeout=10).close()
+            )
+        except Exception:
+            pass
+        await asyncio.sleep(240)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Validar secrets al arranque. Modo estricto se activa automáticamente
@@ -266,10 +289,12 @@ async def lifespan(app: FastAPI):
     # Arrancar tareas en segundo plano
     cleanup = asyncio.create_task(_cleanup_task())
     keepalive = asyncio.create_task(db_keepalive())
+    heartbeat = asyncio.create_task(_heartbeat_task())
     yield
     poller.stop()
     keepalive.cancel()
     cleanup.cancel()
+    heartbeat.cancel()
     await asyncio.sleep(0)  # Permitir a las tareas limpiar
 
 app = FastAPI(
